@@ -1,0 +1,12 @@
+error-application = انجام عملیات ممکن نشد.
+error-configuration = پیکربندی سرویس معتبر نیست.
+error-dependency-unavailable = یکی از سرویس‌های لازم موقتاً در دسترس نیست.
+error-permission-denied = دسترسی مجاز نیست.
+error-setting-validation = مقدار تنظیم معتبر نیست.
+error-setting-conflict = این تنظیم تغییر کرده است؛ مقدار جدید را بررسی و دوباره تلاش کنید.
+error-localization = پیام درخواستی در دسترس نیست.
+error-file-too-large = اندازه فایل از حد مجاز { $limit } بیشتر است.
+error-quota-exceeded = سهمیه شما تا { $reset_at } تمام شده است.
+error-rate-limited = درخواست‌ها بیش از حد است. { $seconds } ثانیه دیگر تلاش کنید.
+error-file-not-found = فایل درخواستی پیدا نشد.
+error-link-expired = اعتبار این پیوند تمام شده است.

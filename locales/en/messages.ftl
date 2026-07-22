@@ -1,0 +1,11 @@
+language-select = Please select your language
+welcome = Welcome, { $name }.
+operation-cancelled = The operation was cancelled.
+operation-completed = The operation completed successfully.
+file-received = File received: <code>{ $filename }</code>
+job-queued = Your job is queued at position { $position }.
+job-progress = Processing: { $percent }%
+file-ready = Your file is ready.
+maintenance-active = The service is temporarily under maintenance.
+support-ticket-created = Ticket <code>{ $ticket }</code> was created.
+settings-saved = Setting <code>{ $key }</code> was saved as version { $version }.

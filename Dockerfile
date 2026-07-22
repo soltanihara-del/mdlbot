@@ -10,7 +10,7 @@ WORKDIR /build
 COPY pyproject.toml ./
 COPY app ./app
 RUN python -m pip wheel --wheel-dir /wheels . \
-    && python -m pip wheel --wheel-dir /wheels pytest==8.4.1 pytest-asyncio==1.0.0 PyYAML==6.0.2
+    && python -m pip wheel --wheel-dir /wheels pytest==8.4.1 pytest-asyncio==1.0.0 PyYAML==6.0.2 httpx==0.28.1
 
 FROM ${PYTHON_IMAGE} AS app-runtime
 ARG APP_UID=10001
@@ -33,6 +33,7 @@ RUN python -m venv /opt/mdlbot \
 COPY --chmod=0555 --chown=${APP_UID}:${APP_GID} docker/app/entrypoint.sh /usr/local/bin/mdlbot-entrypoint
 COPY --chown=${APP_UID}:${APP_GID} alembic.ini /app/alembic.ini
 COPY --chown=${APP_UID}:${APP_GID} app/db/migrations /app/app/db/migrations
+COPY --chown=${APP_UID}:${APP_GID} locales /app/locales
 WORKDIR /app
 USER ${APP_UID}:${APP_GID}
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/mdlbot-entrypoint"]

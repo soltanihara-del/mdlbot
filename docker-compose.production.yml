@@ -27,6 +27,8 @@ services:
     security_opt: *app-security
   migrate:
     security_opt: *app-security
+  bootstrap:
+    security_opt: *app-security
   external-download-worker:
     security_opt:
       - no-new-privileges:true

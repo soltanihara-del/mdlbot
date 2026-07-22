@@ -1,0 +1,17 @@
+language-fa = 🇮🇷 فارسی
+language-en = 🇬🇧 English
+menu-send-telegram-file = ارسال فایل تلگرام
+menu-send-direct-url = ارسال لینک مستقیم
+menu-my-files = فایل‌های من
+menu-account-status = وضعیت حساب
+action-download-file = دانلود فایل
+action-watch-online = تماشای آنلاین
+action-listen-online = پخش آنلاین صوت
+action-share-public = اشتراک عمومی
+action-delete-file = حذف فایل
+action-cancel = لغو عملیات
+action-confirm = تأیید
+action-back = بازگشت
+menu-support = ارتباط با پشتیبانی
+menu-settings = تنظیمات
+menu-help = راهنما

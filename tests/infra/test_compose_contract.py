@@ -129,6 +129,7 @@ def test_production_overlay_assigns_workload_apparmor_profiles() -> None:
         "usage-collector",
         "backup-service",
         "migrate",
+        "bootstrap",
     }
     assert set(PRODUCTION["services"]) == expected
     for name, service in PRODUCTION["services"].items():

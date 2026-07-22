@@ -1,0 +1,12 @@
+error-application = The operation could not be completed.
+error-configuration = The service configuration is invalid.
+error-dependency-unavailable = A required service is temporarily unavailable.
+error-permission-denied = Access denied.
+error-setting-validation = The setting value is invalid.
+error-setting-conflict = This setting changed; review the latest value and try again.
+error-localization = The requested message is unavailable.
+error-file-too-large = The file exceeds the allowed size of { $limit }.
+error-quota-exceeded = Your quota is exhausted until { $reset_at }.
+error-rate-limited = Too many requests. Try again in { $seconds } seconds.
+error-file-not-found = The requested file was not found.
+error-link-expired = This link has expired.

@@ -1,0 +1,17 @@
+language-fa = 🇮🇷 فارسی
+language-en = 🇬🇧 English
+menu-send-telegram-file = Send Telegram File
+menu-send-direct-url = Send Direct Link
+menu-my-files = My Files
+menu-account-status = Account Status
+action-download-file = Download File
+action-watch-online = Watch Online
+action-listen-online = Listen Online
+action-share-public = Share Publicly
+action-delete-file = Delete File
+action-cancel = Cancel Operation
+action-confirm = Confirm
+action-back = Back
+menu-support = Contact Support
+menu-settings = Settings
+menu-help = Help

@@ -128,7 +128,7 @@ services:
   bot:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "bot"]
     environment:
@@ -162,7 +162,7 @@ services:
   api:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "api"]
     environment:
@@ -202,7 +202,7 @@ services:
   dispatcher:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "dispatcher"]
     environment: *app-environment
@@ -222,7 +222,7 @@ services:
   external-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "external-download-worker"]
     environment:
@@ -256,7 +256,7 @@ services:
   telegram-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-download-worker"]
     environment:
@@ -293,7 +293,7 @@ services:
   telegram-upload-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-upload-worker"]
     environment:
@@ -331,7 +331,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/media:0.3.0
+    image: mdlbot/media:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "media-worker"]
     environment:
@@ -367,7 +367,7 @@ services:
   cleanup-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "cleanup-worker"]
     environment: *app-environment
@@ -392,7 +392,7 @@ services:
   broadcast-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "broadcast-worker"]
     environment:
@@ -419,7 +419,7 @@ services:
   scheduler:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "scheduler"]
     environment: *app-environment
@@ -439,7 +439,7 @@ services:
   usage-collector:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "usage-collector"]
     environment: *app-environment
@@ -527,7 +527,7 @@ services:
   migrate:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.3.0
+    image: mdlbot/app:0.4.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -551,6 +551,31 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+
+  bootstrap:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.4.0
+    profiles: [operations]
+    restart: "no"
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "bootstrap"]
+    environment:
+      <<: *app-environment
+      INITIAL_SUPER_ADMIN_TELEGRAM_ID: ${INITIAL_SUPER_ADMIN_TELEGRAM_ID:?INITIAL_SUPER_ADMIN_TELEGRAM_ID must be set}
+      INITIAL_SUPER_ADMIN_LANGUAGE: ${INITIAL_SUPER_ADMIN_LANGUAGE:-fa}
+      REDIS_REQUIRED: "0"
+    secrets: *app-secrets
+    networks:
+      database_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=32m,noexec,nosuid,nodev
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     mem_limit: 512m
     cpus: 1.0
     pids_limit: 128
@@ -616,7 +641,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/backup:0.3.0
+    image: mdlbot/backup:0.4.0
     profiles: [operations]
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "backup-service"]

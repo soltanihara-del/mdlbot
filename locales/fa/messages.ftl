@@ -1,0 +1,11 @@
+language-select = لطفاً زبان خود را انتخاب کنید
+welcome = خوش آمدید، { $name }.
+operation-cancelled = عملیات لغو شد.
+operation-completed = عملیات با موفقیت انجام شد.
+file-received = فایل دریافت شد: <code>{ $filename }</code>
+job-queued = کار شما در جایگاه { $position } صف قرار گرفت.
+job-progress = در حال پردازش: { $percent }٪
+file-ready = فایل شما آماده است.
+maintenance-active = سرویس موقتاً در حالت نگهداری است.
+support-ticket-created = تیکت <code>{ $ticket }</code> ایجاد شد.
+settings-saved = تنظیم <code>{ $key }</code> با نسخه { $version } ذخیره شد.
