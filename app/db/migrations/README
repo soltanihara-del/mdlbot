@@ -1,0 +1,5 @@
+This directory contains immutable Alembic revisions for the PostgreSQL schema.
+
+Run migrations only with a dedicated migration database role. The application
+runtime role must not own schema objects or receive DDL privileges.
+

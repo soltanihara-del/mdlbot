@@ -1,0 +1,58 @@
+"""Shared SQLAlchemy declarative base and column mixins."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import DateTime, MetaData, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_N_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
+class Base(DeclarativeBase):
+    """Base class for every persistent ORM entity."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+class UUIDPrimaryKeyMixin:
+    """Application-generated UUID primary key."""
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+
+
+class TimestampMixin:
+    """UTC-aware creation and update timestamps."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class CreatedAtMixin:
+    """UTC-aware creation timestamp for append-only records."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SoftDeleteMixin:
+    """Optional soft-deletion timestamp."""
+
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
