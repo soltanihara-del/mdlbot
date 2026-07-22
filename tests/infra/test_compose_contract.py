@@ -230,6 +230,21 @@ def test_nginx_delivery_locations_are_internal_and_range_is_bounded() -> None:
     assert "return 444;" in nginx
     assert "$request_method != POST" in nginx
     assert "$content_type !~*" in nginx
+    assert 'map $request_uri $log_safe_uri' in main
+    assert "/d/[redacted]" in main
+    assert "/telegram/webhook/[redacted]" in main
+    assert '"range":"$http_range"' in main
+    assert "proxy_hide_header X-MDLBot-Session-ID" in nginx
+
+
+def test_download_key_is_available_only_to_required_services() -> None:
+    users = {
+        name
+        for name, service in SERVICES.items()
+        if "download_signing_key" in service.get("secrets", [])
+    }
+    assert users == {"api", "bot", "usage-collector"}
+    assert SERVICES["usage-collector"]["volumes"] == ["nginx_logs:/var/log/mdlbot:ro"]
 
 
 def test_worker_credentials_and_data_planes_are_least_privilege() -> None:

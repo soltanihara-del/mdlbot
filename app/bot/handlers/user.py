@@ -10,8 +10,15 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.callbacks import LanguageCallback
-from app.bot.keyboards import cancel_keyboard, language_keyboard, main_menu, menu_labels
+from app.bot.callbacks import FileCallback, LanguageCallback
+from app.bot.keyboards import (
+    cancel_keyboard,
+    download_url_keyboard,
+    file_actions_keyboard,
+    language_keyboard,
+    main_menu,
+    menu_labels,
+)
 from app.bot.repositories import UserRepository
 from app.bot.states import DirectUrlStates, LanguageStates, SupportStates, TelegramFileStates
 from app.core.i18n import LocalizationService
@@ -21,9 +28,15 @@ from app.db.models.admin import Setting
 from datetime import UTC, datetime
 from app.services.admission import AdmissionService
 from app.services.url_policy import normalize_external_url
+from app.services.downloads import DownloadService
+from app.core.errors import DownloadDenied
 
 
-def build_user_router(i18n: LocalizationService, admission: AdmissionService) -> Router:
+def build_user_router(
+    i18n: LocalizationService,
+    admission: AdmissionService,
+    downloads: DownloadService | None = None,
+) -> Router:
     router = Router(name="user")
     users = UserRepository()
 
@@ -184,16 +197,50 @@ def build_user_router(i18n: LocalizationService, admission: AdmissionService) ->
         if not files:
             await message.answer(i18n.format(user_record.language_code, "my-files-empty"))
             return
-        items = "\n".join(
-            i18n.format(
+        await message.answer(i18n.format(user_record.language_code, "my-files-title"))
+        for item in files:
+            await message.answer(
+                i18n.format(
                 user_record.language_code,
                 "my-files-item",
                 filename=item.display_filename,
                 expires=item.expires_at.date().isoformat(),
+                ),
+                reply_markup=file_actions_keyboard(
+                    i18n,
+                    user_record.language_code,
+                    item.file_id,
+                ),
             )
-            for item in files
+
+    @router.callback_query(FileCallback.filter(F.action == "download"))
+    async def create_download_link(
+        callback: CallbackQuery,
+        callback_data: FileCallback,
+        user_record: User,
+        session: AsyncSession,
+    ) -> None:
+        if downloads is None:
+            raise DownloadDenied("download link service is not configured")
+        grant = await downloads.create_link(
+            session,
+            user=user_record,
+            file_id=callback_data.file_id,
         )
-        await message.answer(i18n.format(user_record.language_code, "my-files-list", items=items))
+        await callback.answer()
+        if isinstance(callback.message, Message):
+            await callback.message.answer(
+                i18n.format(
+                    user_record.language_code,
+                    "download-link-ready",
+                    expires=grant.expires_at.date().isoformat(),
+                ),
+                reply_markup=download_url_keyboard(
+                    i18n,
+                    user_record.language_code,
+                    grant.url,
+                ),
+            )
 
     @router.message(F.text.in_(menu_labels(i18n, "menu-account-status")))
     async def account_status(message: Message, user_record: User) -> None:

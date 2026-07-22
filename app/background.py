@@ -19,6 +19,7 @@ from app.db.session import Database
 from app.dispatcher.service import DispatcherService, OutboxPublisher
 from app.workers.client import WorkerClient
 from app.services.quota import QuotaService
+from app.usage import UsageCollector
 from app.workers.downloads import (
     ExternalDownloadProcessor,
     StorageWriter,
@@ -45,6 +46,22 @@ async def run_background_service(service: str, settings: RuntimeSettings) -> Non
     install_stop_handlers(stop)
     if service == "dispatcher":
         await run_dispatcher(settings, stop)
+        return
+    if service == "usage-collector":
+        settings.validate_dependencies()
+        database = Database(settings)
+        redis = RedisManager(settings)
+        await database.start()
+        await redis.start()
+        try:
+            await UsageCollector(settings, database, redis).run(
+                stop,
+                heartbeat_path(service),
+            )
+        finally:
+            heartbeat_path(service).unlink(missing_ok=True)
+            await redis.close()
+            await database.close()
         return
     writer = StorageWriter(
         settings.storage_root,

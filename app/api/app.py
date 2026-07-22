@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import json
+from html import escape
 from typing import Any
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app import __version__
 from app.core.config import RuntimeSettings, load_settings
@@ -26,6 +27,8 @@ from app.api.schemas.workers import (
 from app.services.quota import QuotaService
 from app.workers.control import WorkerControlService
 from app.workers.auth import WorkerAuthenticator
+from app.services.downloads import DownloadService, content_disposition
+from app.core.errors import DownloadDenied
 
 
 def create_app(
@@ -37,6 +40,7 @@ def create_app(
     webhook_proxy: WebhookProxy | None = None,
     worker_control: WorkerControlService | None = None,
     worker_authenticator: WorkerAuthenticator | None = None,
+    download_service: DownloadService | None = None,
 ) -> FastAPI:
     runtime = settings or load_settings("api")
     db = database or Database(runtime)
@@ -45,6 +49,9 @@ def create_app(
     proxy = webhook_proxy or WebhookProxy(runtime)
     workers = worker_control or WorkerControlService(db, cache, QuotaService())
     worker_auth = worker_authenticator or WorkerAuthenticator(runtime)
+    downloads = download_service or (
+        DownloadService(runtime, cache) if runtime.download_signing_key_file is not None else None
+    )
     log = get_logger("api")
 
     @asynccontextmanager
@@ -72,6 +79,8 @@ def create_app(
         )
         if runtime.app_env == "production" or worker_credentials_configured:
             worker_auth.start()
+        if runtime.app_env == "production" and downloads is None:
+            raise ValueError("DOWNLOAD_SIGNING_KEY_FILE is required in production")
         app.state.accepting_requests = True
         log.info("api_started", **runtime.safe_summary())
         try:
@@ -234,6 +243,56 @@ def create_app(
             {"ok": accepted},
             status_code=200 if accepted else status.HTTP_409_CONFLICT,
         )
+
+    @app.get("/d/{token}", include_in_schema=False)
+    async def direct_download(request: Request, token: str, s: str | None = None) -> Response:
+        if downloads is None:
+            return JSONResponse({"ok": False}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+        source_ip = request.headers.get("x-real-ip") or (
+            request.client.host if request.client is not None else "unknown"
+        )
+        user_agent = request.headers.get("user-agent", "")
+        try:
+            async with db.transaction() as session:
+                grant = await downloads.authorize(
+                    session,
+                    raw_token=token,
+                    raw_session=s,
+                    source_ip=source_ip,
+                    user_agent=user_agent,
+                    range_header=request.headers.get("range"),
+                )
+        except DownloadDenied as exc:
+            language = str(exc.context.get("language", runtime.default_locale))
+            title = i18n.format(language, "download-error-title")
+            message = i18n.format(language, "download-error-generic")
+            body = (
+                "<!doctype html><html><head><meta charset=\"utf-8\">"
+                f"<title>{escape(title)}</title></head><body><main><h1>{escape(title)}</h1>"
+                f"<p>{escape(message)}</p></main></body></html>"
+            )
+            return HTMLResponse(body, status_code=status.HTTP_404_NOT_FOUND, headers={"Cache-Control": "no-store"})
+        if grant.redirect_url is not None:
+            return RedirectResponse(
+                grant.redirect_url,
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+            )
+        headers = {
+            "X-Accel-Redirect": str(grant.internal_path),
+            "Content-Type": grant.mime_type,
+            "Content-Disposition": content_disposition(grant.filename),
+            "ETag": grant.etag,
+            "Cache-Control": "private, no-store",
+            "Accept-Ranges": "bytes",
+            "X-MDLBot-Session-ID": str(grant.session_id),
+            "X-MDLBot-Link-ID": str(grant.link_id),
+            "X-MDLBot-File-ID": str(grant.file_id),
+            "X-MDLBot-User-ID": str(grant.user_id),
+        }
+        if grant.rate_bytes_per_second is not None:
+            headers["X-Accel-Limit-Rate"] = str(grant.rate_bytes_per_second)
+        return Response(status_code=status.HTTP_200_OK, headers=headers)
 
     return app
 

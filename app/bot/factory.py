@@ -29,6 +29,7 @@ from app.db.session import Database
 from app.core.settings import SettingsService
 from app.services.admission import AdmissionService
 from app.services.quota import QuotaService
+from app.services.downloads import DownloadService
 
 
 BOT_TOKEN_RE = re.compile(r"^[0-9]{6,}:[A-Za-z0-9_-]{20,}$")
@@ -80,6 +81,11 @@ def create_bot_components(
     dispatcher.update.outer_middleware(AccessPolicyMiddleware(i18n, redis))
     authorization = AuthorizationService()
     admission = AdmissionService(SettingsService(authorization, redis), QuotaService())
+    downloads = (
+        DownloadService(settings, redis)
+        if settings.download_signing_key_file is not None
+        else None
+    )
     dispatcher.include_router(build_admin_router(i18n, authorization))
-    dispatcher.include_router(build_user_router(i18n, admission))
+    dispatcher.include_router(build_user_router(i18n, admission, downloads))
     return BotComponents(bot=bot, dispatcher=dispatcher)

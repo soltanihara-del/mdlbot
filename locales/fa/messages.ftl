@@ -24,9 +24,11 @@ main-menu-prompt = یک گزینه را از منو انتخاب کنید.
 prompt-send-telegram-file = فایل تلگرامی موردنظر برای پردازش را ارسال کنید.
 prompt-send-direct-url = یک نشانی مستقیم HTTP یا HTTPS ارسال کنید.
 my-files-empty = فایل فعالی ندارید.
+my-files-title = <b>فایل‌های اخیر شما</b>
 my-files-list = <b>فایل‌های اخیر شما</b>
     { $items }
 my-files-item = • { $filename } — { $expires }
+download-link-ready = لینک امن دانلود شما آماده است و تا { $expires } اعتبار دارد.
 account-summary = وضعیت حساب: <b>{ $status }</b>
     زبان رابط: { $locale }
 settings-language = زبان رابط را انتخاب کنید.

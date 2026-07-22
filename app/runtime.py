@@ -27,6 +27,7 @@ IMPLEMENTED_SERVICES = {
     "external-download-worker",
     "telegram-download-worker",
     "telegram-upload-worker",
+    "usage-collector",
 }
 
 
@@ -69,6 +70,7 @@ def _run(service: str) -> None:
         proxy_headers=False,
         server_header=False,
         timeout_graceful_shutdown=settings.graceful_shutdown_seconds,
+        access_log=False,
     )
 
 

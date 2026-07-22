@@ -6,3 +6,5 @@ web-password-label = گذرواژه
 web-submit = ادامه
 web-range-error = بازه درخواستی رسانه معتبر نیست.
 web-network-error = ارتباط شبکه قطع شد.
+download-error-title = دانلود در دسترس نیست
+download-error-generic = این لینک دانلود نامعتبر، منقضی، محدود یا دیگر در دسترس نیست.

@@ -57,6 +57,10 @@ class UnsafeUrl(ApplicationError):
     code = "unsafe_url"
 
 
+class DownloadDenied(ApplicationError):
+    code = "download_denied"
+
+
 class LocalizationError(ApplicationError):
     code = "localization_error"
 

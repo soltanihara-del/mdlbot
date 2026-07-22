@@ -6,3 +6,5 @@ web-password-label = Password
 web-submit = Continue
 web-range-error = The requested media range is invalid.
 web-network-error = The network connection was interrupted.
+download-error-title = Download unavailable
+download-error-generic = This download link is invalid, expired, restricted, or no longer available.

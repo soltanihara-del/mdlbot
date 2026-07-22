@@ -48,6 +48,7 @@ class RuntimeSettings(BaseSettings):
     telegram_webhook_path_file: Path | None = None
     telegram_webhook_secret_token_file: Path | None = None
     internal_service_token_file: Path | None = None
+    download_signing_key_file: Path | None = None
     worker_token_file: Path | None = None
     external_worker_token_file: Path | None = None
     telegram_download_worker_token_file: Path | None = None
@@ -61,6 +62,7 @@ class RuntimeSettings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     storage_root: Path = Path("/srv/storage/objects")
+    usage_logs_path: Path = Path("/var/log/mdlbot")
 
     locales_path: Path = Path("locales")
     default_locale: Literal["fa", "en"] = "fa"

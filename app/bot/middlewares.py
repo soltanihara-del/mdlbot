@@ -63,6 +63,7 @@ class ErrorMiddleware(BaseMiddleware):
                 "quota_exceeded": "error-quota-exceeded-generic",
                 "admission_denied": "error-admission-denied",
                 "unsafe_url": "error-unsafe-url",
+                "download_denied": "error-download-denied",
             }.get(exc.code, "error-application")
             self._log.warning("bot_application_error", error_code=exc.code, context=exc.context)
             if isinstance(event, Update):

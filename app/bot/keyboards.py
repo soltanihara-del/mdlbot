@@ -9,7 +9,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
-from app.bot.callbacks import AdminCallback, LanguageCallback
+from app.bot.callbacks import AdminCallback, FileCallback, LanguageCallback
 from app.core.i18n import LocalizationService
 
 
@@ -95,3 +95,32 @@ def forced_join_keyboard(channels: list[tuple[str, str]]) -> InlineKeyboardMarku
 
 def menu_labels(i18n: LocalizationService, key: str) -> set[str]:
     return {i18n.format(locale, key) for locale in ("fa", "en")}
+
+
+def file_actions_keyboard(
+    i18n: LocalizationService,
+    locale: str,
+    file_id,
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=i18n.format(locale, "action-download-file"),
+                    callback_data=FileCallback(action="download", file_id=file_id).pack(),
+                )
+            ]
+        ]
+    )
+
+
+def download_url_keyboard(
+    i18n: LocalizationService,
+    locale: str,
+    url: str,
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=i18n.format(locale, "action-download-file"), url=url)]
+        ]
+    )

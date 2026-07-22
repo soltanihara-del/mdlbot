@@ -3,9 +3,11 @@ from app.bot.callbacks import (
     ConfirmationCallback,
     LanguageCallback,
     MenuCallback,
+    FileCallback,
 )
 from app.bot.keyboards import ADMIN_SECTIONS, admin_menu, language_keyboard, main_menu
 from app.core.i18n import LocalizationService
+from uuid import UUID
 
 
 def service() -> LocalizationService:
@@ -20,6 +22,10 @@ def test_callback_payloads_fit_telegram_limit() -> None:
         MenuCallback(section="account").pack(),
         AdminCallback(section="settings").pack(),
         ConfirmationCallback(token="A" * 43).pack(),
+        FileCallback(
+            action="download",
+            file_id=UUID("019ac0f2-34b3-7ccf-9fa9-9b9aa918bfba"),
+        ).pack(),
     ]
     assert all(len(payload.encode("utf-8")) <= 64 for payload in payloads)
 

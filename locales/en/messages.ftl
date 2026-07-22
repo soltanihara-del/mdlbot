@@ -24,9 +24,11 @@ main-menu-prompt = Choose an action from the menu.
 prompt-send-telegram-file = Send the Telegram file you want processed.
 prompt-send-direct-url = Send one direct HTTP or HTTPS URL.
 my-files-empty = You do not have any active files.
+my-files-title = <b>Your recent files</b>
 my-files-list = <b>Your recent files</b>
     { $items }
 my-files-item = • { $filename } — { $expires }
+download-link-ready = Your secure download link is ready and remains valid until { $expires }.
 account-summary = Account status: <b>{ $status }</b>
     Interface language: { $locale }
 settings-language = Choose your interface language.

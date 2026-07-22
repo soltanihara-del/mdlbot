@@ -97,6 +97,10 @@ server {
         proxy_set_header If-Range $http_if_range;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        proxy_hide_header X-MDLBot-Session-ID;
+        proxy_hide_header X-MDLBot-Link-ID;
+        proxy_hide_header X-MDLBot-File-ID;
+        proxy_hide_header X-MDLBot-User-ID;
         proxy_connect_timeout 3s;
         proxy_read_timeout 60s;
     }
@@ -108,11 +112,8 @@ server {
         sendfile on;
         directio 8m;
         aio threads;
-        limit_rate_after 1m;
-        limit_rate 8m;
         add_header Accept-Ranges bytes always;
         add_header X-Content-Type-Options nosniff always;
-        add_header Content-Disposition attachment always;
     }
 
     location ^~ /__protected/media/ {

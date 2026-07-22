@@ -128,7 +128,7 @@ services:
   bot:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "bot"]
     environment:
@@ -137,6 +137,8 @@ services:
       TELEGRAM_WEBHOOK_PATH_FILE: /run/secrets/telegram_webhook_path
       TELEGRAM_WEBHOOK_SECRET_TOKEN_FILE: /run/secrets/telegram_webhook_secret_token
       INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN must be set}
       TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
       TELEGRAM_API_MODE: ${TELEGRAM_API_MODE:-local}
       BOT_INTERNAL_PORT: "8001"
@@ -147,6 +149,7 @@ services:
       - postgres_app_password
       - redis_password
       - internal_service_token
+      - download_signing_key
     networks:
       application_network:
       database_network:
@@ -163,7 +166,7 @@ services:
   api:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "api"]
     environment:
@@ -216,7 +219,7 @@ services:
   dispatcher:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "dispatcher"]
     environment: *app-environment
@@ -236,7 +239,7 @@ services:
   external-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "external-download-worker"]
     environment:
@@ -270,7 +273,7 @@ services:
   telegram-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-download-worker"]
     environment:
@@ -307,7 +310,7 @@ services:
   telegram-upload-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-upload-worker"]
     environment:
@@ -346,7 +349,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/media:0.6.0
+    image: mdlbot/media:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "media-worker"]
     environment:
@@ -382,7 +385,7 @@ services:
   cleanup-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "cleanup-worker"]
     environment: *app-environment
@@ -407,7 +410,7 @@ services:
   broadcast-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "broadcast-worker"]
     environment:
@@ -434,7 +437,7 @@ services:
   scheduler:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "scheduler"]
     environment: *app-environment
@@ -454,11 +457,16 @@ services:
   usage-collector:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "usage-collector"]
-    environment: *app-environment
-    secrets: *app-secrets
+    environment:
+      <<: *app-environment
+      DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - download_signing_key
     networks:
       application_network:
       database_network:
@@ -542,7 +550,7 @@ services:
   migrate:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -573,7 +581,7 @@ services:
   bootstrap:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.6.0
+    image: mdlbot/app:0.7.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -656,7 +664,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/backup:0.6.0
+    image: mdlbot/backup:0.7.0
     profiles: [operations]
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "backup-service"]

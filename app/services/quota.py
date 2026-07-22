@@ -43,6 +43,14 @@ class EffectivePlan:
     queue_priority: int
     retention_seconds: int
     external_url_enabled: bool
+    concurrent_downloads: int
+    active_link_limit: int
+    download_connection_limit: int
+    allowed_ips_per_session: int
+    resume_limit: int
+    range_request_limit: int
+    download_rate: int | None
+    one_time_link_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +224,14 @@ class QuotaService:
             queue_priority=plan.queue_priority,
             retention_seconds=plan.retention_seconds,
             external_url_enabled=plan.external_url_enabled,
+            concurrent_downloads=plan.concurrent_downloads,
+            active_link_limit=plan.active_link_limit,
+            download_connection_limit=plan.download_connection_limit,
+            allowed_ips_per_session=plan.allowed_ips_per_session,
+            resume_limit=plan.resume_limit,
+            range_request_limit=plan.range_request_limit,
+            download_rate=plan.download_rate,
+            one_time_link_enabled=plan.one_time_link_enabled,
         )
         override = await session.scalar(
             select(UserQuotaOverride)
