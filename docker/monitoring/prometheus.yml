@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    deployment: mdlbot
+
+scrape_configs:
+  - job_name: mdlbot-api
+    metrics_path: /internal/metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - api:8000
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - 127.0.0.1:9090

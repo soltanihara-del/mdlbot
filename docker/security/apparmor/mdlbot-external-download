@@ -1,0 +1,38 @@
+#include <tunables/global>
+
+profile mdlbot-external-download flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  signal,
+
+  deny capability,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny ptrace,
+  deny /proc/sys/** wklx,
+  deny /sys/** wklx,
+
+  /usr/bin/tini ixr,
+  /usr/local/bin/mdlbot-entrypoint ixr,
+  /usr/local/bin/python* ixr,
+  /bin/sh ixr,
+  /opt/mdlbot/bin/** ixr,
+  /opt/mdlbot/** mr,
+  /usr/** mr,
+  /lib/** mr,
+  /lib64/** mr,
+  /etc/** r,
+  /proc/** r,
+  /dev/null rw,
+  /dev/urandom r,
+  /run/secrets/internal_service_token r,
+  /tmp/** rwk,
+  /srv/storage/objects/** rwk,
+  /srv/storage/quarantine/** rwk,
+}

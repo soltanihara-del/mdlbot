@@ -1,0 +1,43 @@
+#include <tunables/global>
+
+profile mdlbot-nginx flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  network inet stream,
+  network inet6 stream,
+  signal,
+  deny network raw,
+  deny capability,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny ptrace,
+  deny /proc/sys/** wklx,
+  deny /sys/** wklx,
+
+  /usr/local/bin/mdlbot-nginx-entrypoint ixr,
+  /usr/sbin/nginx ixr,
+  /usr/bin/envsubst ixr,
+  /usr/bin/grep ixr,
+  /usr/bin/install ixr,
+  /usr/bin/tr ixr,
+  /bin/sh ixr,
+  /bin/** ixr,
+  /usr/lib/** mr,
+  /lib/** mr,
+  /etc/nginx/** r,
+  /etc/ssl/** r,
+  /run/secrets/telegram_webhook_path r,
+  /run/tls/** r,
+  /run/nginx/** rwk,
+  /var/cache/nginx/** rwk,
+  /var/log/mdlbot/** rwk,
+  /var/www/acme/** r,
+  /srv/storage/** r,
+  /proc/** r,
+  /dev/stdout rw,
+  /dev/stderr rw,
+  /dev/null rw,
+  /dev/urandom r,
+}

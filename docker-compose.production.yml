@@ -1,0 +1,37 @@
+services:
+  nginx:
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=mdlbot-nginx
+  bot:
+    security_opt: &app-security
+      - no-new-privileges:true
+      - apparmor=mdlbot-app
+  api:
+    security_opt: *app-security
+  dispatcher:
+    security_opt: *app-security
+  telegram-download-worker:
+    security_opt: *app-security
+  telegram-upload-worker:
+    security_opt: *app-security
+  cleanup-worker:
+    security_opt: *app-security
+  broadcast-worker:
+    security_opt: *app-security
+  scheduler:
+    security_opt: *app-security
+  usage-collector:
+    security_opt: *app-security
+  backup-service:
+    security_opt: *app-security
+  migrate:
+    security_opt: *app-security
+  external-download-worker:
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=mdlbot-external-download
+  media-worker:
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=mdlbot-media

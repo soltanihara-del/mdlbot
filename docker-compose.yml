@@ -1,0 +1,803 @@
+name: mdlbot
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+  ulimits:
+    nofile:
+      soft: 8192
+      hard: 8192
+  logging: *default-logging
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+  target: app-runtime
+  args:
+    PYTHON_IMAGE: python:3.12.13-slim-bookworm
+    APP_UID: "10001"
+    APP_GID: "10001"
+
+x-app-environment: &app-environment
+  TZ: ${TZ:-UTC}
+  APP_ENV: production
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: mdlbot
+  POSTGRES_USER: mdlbot_app
+  DATABASE_PASSWORD_FILE: /run/secrets/postgres_app_password
+  DATABASE_REQUIRED: "1"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD_FILE: /run/secrets/redis_password
+  REDIS_REQUIRED: "1"
+
+x-app-secrets: &app-secrets
+  - postgres_app_password
+  - redis_password
+
+x-app-dependencies: &app-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-app-healthcheck: &app-healthcheck
+  interval: 20s
+  timeout: 5s
+  start_period: 20s
+  retries: 5
+
+services:
+  nginx:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: docker/nginx.Dockerfile
+      args:
+        NGINX_IMAGE: nginx:1.30.4-alpine3.24
+    image: mdlbot/nginx:0.3.0
+    user: "101:101"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN must be set}
+      TELEGRAM_WEBHOOK_PATH_FILE: /run/secrets/telegram_webhook_path
+    secrets:
+      - telegram_webhook_path
+    ports:
+      - target: 8080
+        published: "80"
+        protocol: tcp
+        mode: host
+      - target: 8443
+        published: "443"
+        protocol: tcp
+        mode: host
+    networks:
+      public_network:
+      application_network:
+    volumes:
+      - type: bind
+        source: ./runtime/tls
+        target: /run/tls
+        read_only: true
+      - type: volume
+        source: acme_challenge
+        target: /var/www/acme
+        read_only: true
+      - type: volume
+        source: file_storage
+        target: /srv/storage/objects
+        read_only: true
+      - type: volume
+        source: media_storage
+        target: /srv/storage/media
+        read_only: true
+      - type: volume
+        source: hls_storage
+        target: /srv/storage/hls
+        read_only: true
+      - type: volume
+        source: nginx_logs
+        target: /var/log/mdlbot
+    tmpfs:
+      - /run/nginx:uid=101,gid=101,mode=0750,size=64m,noexec,nosuid,nodev
+      - /var/cache/nginx:uid=101,gid=101,mode=0750,size=64m,noexec,nosuid,nodev
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    mem_limit: 384m
+    cpus: 1.0
+
+  bot:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "bot"]
+    environment:
+      <<: *app-environment
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      TELEGRAM_WEBHOOK_PATH_FILE: /run/secrets/telegram_webhook_path
+      TELEGRAM_WEBHOOK_SECRET_TOKEN_FILE: /run/secrets/telegram_webhook_secret_token
+      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
+      TELEGRAM_API_MODE: ${TELEGRAM_API_MODE:-local}
+    secrets:
+      - bot_token
+      - telegram_webhook_path
+      - telegram_webhook_secret_token
+      - postgres_app_password
+      - redis_password
+      - internal_service_token
+    networks:
+      application_network:
+      database_network:
+      telegram_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "bot"]
+    mem_limit: 512m
+    cpus: 1.0
+
+  api:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "api"]
+    environment:
+      <<: *app-environment
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      TELEGRAM_WEBHOOK_PATH_FILE: /run/secrets/telegram_webhook_path
+      TELEGRAM_WEBHOOK_SECRET_TOKEN_FILE: /run/secrets/telegram_webhook_secret_token
+      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+    secrets:
+      - bot_token
+      - telegram_webhook_path
+      - telegram_webhook_secret_token
+      - postgres_app_password
+      - redis_password
+      - internal_service_token
+      - download_signing_key
+    networks:
+      application_network:
+      database_network:
+      media_network:
+      external_download_network:
+        ipv4_address: 172.29.60.10
+    volumes:
+      - file_storage:/srv/storage/objects:ro
+      - media_storage:/srv/storage/media:ro
+      - hls_storage:/srv/storage/hls:ro
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8000/health/live"]
+    mem_limit: 768m
+    cpus: 1.5
+
+  dispatcher:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "dispatcher"]
+    environment: *app-environment
+    secrets: *app-secrets
+    networks:
+      application_network:
+      database_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "dispatcher"]
+    mem_limit: 512m
+    cpus: 1.0
+
+  external-download-worker:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "external-download-worker"]
+    environment:
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      WORKER_REPORT_URL: http://api:8001/internal/workers
+      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+    secrets:
+      - internal_service_token
+    networks:
+      external_download_network:
+        ipv4_address: 172.29.60.20
+      scanner_network:
+    volumes:
+      - file_storage:/srv/storage/objects
+      - quarantine_storage:/srv/storage/quarantine
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=256m,noexec,nosuid,nodev
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "external-download-worker"]
+    mem_limit: 1024m
+    cpus: 2.0
+    pids_limit: 128
+
+  telegram-download-worker:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "telegram-download-worker"]
+    environment:
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      WORKER_REPORT_URL: http://api:8000/internal/workers
+      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+    secrets:
+      - internal_service_token
+      - bot_token
+    networks:
+      application_network:
+      telegram_network:
+      scanner_network:
+    volumes:
+      - telegram_data:/var/lib/telegram-bot-api:ro
+      - file_storage:/srv/storage/objects
+      - quarantine_storage:/srv/storage/quarantine
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=128m,noexec,nosuid,nodev
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "telegram-download-worker"]
+    mem_limit: 1024m
+    cpus: 1.5
+
+  telegram-upload-worker:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "telegram-upload-worker"]
+    environment:
+      <<: *app-environment
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
+      TELEGRAM_API_MODE: ${TELEGRAM_API_MODE:-local}
+    secrets:
+      - bot_token
+      - postgres_app_password
+      - redis_password
+    networks:
+      application_network:
+      database_network:
+      telegram_network:
+    volumes:
+      - file_storage:/srv/storage/objects:ro
+      - media_storage:/srv/storage/media:ro
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=128m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "telegram-upload-worker"]
+    mem_limit: 1024m
+    cpus: 1.5
+
+  media-worker:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: media-runtime
+      args:
+        PYTHON_IMAGE: python:3.12.13-slim-bookworm
+        APP_UID: "10001"
+        APP_GID: "10001"
+    image: mdlbot/media:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "media-worker"]
+    environment:
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      WORKER_REPORT_URL: http://api:8000/internal/workers
+      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+    secrets:
+      - internal_service_token
+    networks:
+      application_network:
+      media_network:
+      scanner_network:
+    volumes:
+      - file_storage:/srv/storage/objects:ro
+      - media_storage:/srv/storage/media
+      - hls_storage:/srv/storage/hls
+      - quarantine_storage:/srv/storage/quarantine
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=512m,noexec,nosuid,nodev
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "media-worker"]
+    mem_limit: 3072m
+    cpus: 3.0
+    pids_limit: 192
+
+  cleanup-worker:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "cleanup-worker"]
+    environment: *app-environment
+    secrets: *app-secrets
+    networks:
+      application_network:
+      database_network:
+    volumes:
+      - file_storage:/srv/storage/objects
+      - media_storage:/srv/storage/media
+      - hls_storage:/srv/storage/hls
+      - quarantine_storage:/srv/storage/quarantine
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "cleanup-worker"]
+    mem_limit: 768m
+    cpus: 1.0
+
+  broadcast-worker:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "broadcast-worker"]
+    environment:
+      <<: *app-environment
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
+    secrets:
+      - bot_token
+      - postgres_app_password
+      - redis_password
+    networks:
+      application_network:
+      database_network:
+      telegram_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "broadcast-worker"]
+    mem_limit: 512m
+    cpus: 1.0
+
+  scheduler:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "scheduler"]
+    environment: *app-environment
+    secrets: *app-secrets
+    networks:
+      application_network:
+      database_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "scheduler"]
+    mem_limit: 384m
+    cpus: 0.75
+
+  usage-collector:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "usage-collector"]
+    environment: *app-environment
+    secrets: *app-secrets
+    networks:
+      application_network:
+      database_network:
+    volumes:
+      - nginx_logs:/var/log/mdlbot:ro
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on: *app-dependencies
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "usage-collector"]
+    mem_limit: 512m
+    cpus: 1.0
+
+  postgres:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+      args:
+        POSTGRES_IMAGE: postgres:16.13-bookworm
+    image: mdlbot/postgres:16.13-0.3.0
+    user: "999:999"
+    environment:
+      POSTGRES_DB: mdlbot
+      POSTGRES_USER: mdlbot_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_owner_password
+      POSTGRES_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
+      POSTGRES_BACKUP_PASSWORD_FILE: /run/secrets/postgres_backup_password
+      POSTGRES_MONITOR_PASSWORD_FILE: /run/secrets/postgres_monitor_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer --data-checksums
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_owner_password
+      - postgres_app_password
+      - postgres_backup_password
+      - postgres_monitor_password
+    networks:
+      database_network:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /run/postgresql:uid=999,gid=999,mode=0770,size=16m,noexec,nosuid,nodev
+      - /tmp:uid=999,gid=999,mode=0700,size=64m,noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --quiet --username mdlbot_owner --dbname mdlbot"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    stop_grace_period: 60s
+    mem_limit: 2048m
+    cpus: 2.0
+    pids_limit: 256
+    shm_size: 256m
+
+  redis:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: docker/redis.Dockerfile
+      args:
+        REDIS_IMAGE: redis:7.4.9-bookworm
+    image: mdlbot/redis:7.4.9-0.3.0
+    user: "999:999"
+    environment:
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+    secrets:
+      - redis_password
+    networks:
+      database_network:
+    volumes:
+      - redis_data:/data
+    tmpfs:
+      - /run/redis:uid=999,gid=999,mode=0700,size=16m,noexec,nosuid,nodev
+      - /tmp:uid=999,gid=999,mode=0700,size=16m,noexec,nosuid,nodev
+    mem_limit: 1024m
+    cpus: 1.0
+    pids_limit: 128
+
+  migrate:
+    <<: *hardened
+    build: *app-build
+    image: mdlbot/app:0.3.0
+    profiles: [operations]
+    restart: "no"
+    user: "10001:10001"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: mdlbot
+      POSTGRES_USER: mdlbot_owner
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_owner_password
+      DATABASE_REQUIRED: "1"
+      REDIS_REQUIRED: "0"
+    secrets:
+      - postgres_owner_password
+    networks:
+      database_network:
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=32m,noexec,nosuid,nodev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+
+  telegram-bot-api:
+    <<: *hardened
+    profiles: [local-bot-api]
+    build:
+      context: .
+      dockerfile: docker/telegram-bot-api.Dockerfile
+      args:
+        TELEGRAM_BOT_API_COMMIT: adfd7f6a8e990272851777eeb3ae0def4216f161
+        TELEGRAM_UID: "10002"
+        TELEGRAM_GID: "10002"
+    image: mdlbot/telegram-bot-api:10.2-adfd7f6
+    user: "10002:10002"
+    environment:
+      TELEGRAM_API_ID_FILE: /run/secrets/telegram_api_id
+      TELEGRAM_API_HASH_FILE: /run/secrets/telegram_api_hash
+    secrets:
+      - telegram_api_id
+      - telegram_api_hash
+    networks:
+      telegram_network:
+    volumes:
+      - telegram_data:/var/lib/telegram-bot-api
+    tmpfs:
+      - /tmp:uid=10002,gid=10002,mode=0700,size=64m,noexec,nosuid,nodev
+    stop_grace_period: 60s
+    mem_limit: 2048m
+    cpus: 2.0
+    pids_limit: 256
+
+  clamav:
+    <<: *hardened
+    image: clamav/clamav:1.4.5-debian13-slim
+    profiles: [clamav]
+    user: "clamav:clamav"
+    networks:
+      scanner_network:
+    volumes:
+      - clamav_data:/var/lib/clamav
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev
+      - /run/clamav:size=16m,noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+    mem_limit: 2048m
+    cpus: 2.0
+    pids_limit: 256
+
+  backup-service:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backup-runtime
+      args:
+        PYTHON_IMAGE: python:3.12.13-slim-bookworm
+        APP_UID: "10001"
+        APP_GID: "10001"
+    image: mdlbot/backup:0.3.0
+    profiles: [operations]
+    user: "10001:10001"
+    command: ["python", "-m", "app.runtime", "run", "backup-service"]
+    environment:
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: mdlbot
+      POSTGRES_USER: mdlbot_backup
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_backup_password
+      DATABASE_REQUIRED: "1"
+      BACKUP_ENCRYPTION_KEY_FILE: /run/secrets/backup_encryption_key
+    secrets:
+      - postgres_backup_password
+      - backup_encryption_key
+    networks:
+      database_network:
+    volumes:
+      - backup_data:/srv/backups
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=256m,noexec,nosuid,nodev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD", "python", "-m", "app.runtime", "healthcheck", "backup-service"]
+    mem_limit: 1024m
+    cpus: 1.0
+    pids_limit: 128
+
+  monitoring:
+    <<: *hardened
+    image: prom/prometheus:v3.5.5
+    profiles: [monitoring]
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle=false
+      - --web.enable-admin-api=false
+    networks:
+      application_network:
+    volumes:
+      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    tmpfs:
+      - /tmp:uid=65534,gid=65534,mode=0700,size=32m,noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD", "/bin/promtool", "check", "ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    mem_limit: 1024m
+    cpus: 1.0
+
+  grafana:
+    <<: *hardened
+    image: grafana/grafana:13.1.1-ubuntu
+    profiles: [monitoring]
+    user: "472:472"
+    environment:
+      GF_SECURITY_ADMIN_USER: mdlbot_admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: https://${PUBLIC_DOMAIN:?PUBLIC_DOMAIN must be set}/internal-monitoring/
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    secrets:
+      - grafana_admin_password
+    networks:
+      application_network:
+    volumes:
+      - grafana_data:/var/lib/grafana
+    tmpfs:
+      - /tmp:uid=472,gid=472,mode=0700,size=64m,noexec,nosuid,nodev
+    depends_on:
+      monitoring:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    mem_limit: 1024m
+    cpus: 1.0
+
+networks:
+  public_network:
+    name: mdlbot_public
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.10.0/24
+  application_network:
+    name: mdlbot_application
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.20.0/24
+  database_network:
+    name: mdlbot_database
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.30.0/24
+  telegram_network:
+    name: mdlbot_telegram
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.40.0/24
+  media_network:
+    name: mdlbot_media
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.50.0/24
+  external_download_network:
+    name: mdlbot_external_download
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.60.0/24
+  scanner_network:
+    name: mdlbot_scanner
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.70.0/24
+
+volumes:
+  postgres_data:
+  redis_data:
+  telegram_data:
+  file_storage:
+  media_storage:
+  hls_storage:
+  quarantine_storage:
+  nginx_logs:
+  backup_data:
+  acme_challenge:
+  clamav_data:
+  prometheus_data:
+  grafana_data:
+
+secrets:
+  bot_token:
+    file: ./secrets/bot_token
+  telegram_api_id:
+    file: ./secrets/telegram_api_id
+  telegram_api_hash:
+    file: ./secrets/telegram_api_hash
+  telegram_webhook_path:
+    file: ./secrets/telegram_webhook_path
+  telegram_webhook_secret_token:
+    file: ./secrets/telegram_webhook_secret_token
+  postgres_owner_password:
+    file: ./secrets/postgres_owner_password
+  postgres_app_password:
+    file: ./secrets/postgres_app_password
+  postgres_backup_password:
+    file: ./secrets/postgres_backup_password
+  postgres_monitor_password:
+    file: ./secrets/postgres_monitor_password
+  redis_password:
+    file: ./secrets/redis_password
+  internal_service_token:
+    file: ./secrets/internal_service_token
+  download_signing_key:
+    file: ./secrets/download_signing_key
+  backup_encryption_key:
+    file: ./secrets/backup_encryption_key
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password
