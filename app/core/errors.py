@@ -45,6 +45,18 @@ class PermissionDenied(ApplicationError):
     code = "permission_denied"
 
 
+class QuotaExceeded(ApplicationError):
+    code = "quota_exceeded"
+
+
+class AdmissionDenied(ApplicationError):
+    code = "admission_denied"
+
+
+class UnsafeUrl(ApplicationError):
+    code = "unsafe_url"
+
+
 class LocalizationError(ApplicationError):
     code = "localization_error"
 

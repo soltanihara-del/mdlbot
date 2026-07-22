@@ -128,7 +128,7 @@ services:
   bot:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "bot"]
     environment:
@@ -163,7 +163,7 @@ services:
   api:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "api"]
     environment:
@@ -174,6 +174,9 @@ services:
       INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
       DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
       BOT_INTERNAL_URL: http://bot:8001
+      EXTERNAL_WORKER_TOKEN_FILE: /run/secrets/external_worker_token
+      TELEGRAM_DOWNLOAD_WORKER_TOKEN_FILE: /run/secrets/telegram_download_worker_token
+      TELEGRAM_UPLOAD_WORKER_TOKEN_FILE: /run/secrets/telegram_upload_worker_token
     secrets:
       - bot_token
       - telegram_webhook_path
@@ -182,6 +185,9 @@ services:
       - redis_password
       - internal_service_token
       - download_signing_key
+      - external_worker_token
+      - telegram_download_worker_token
+      - telegram_upload_worker_token
     networks:
       application_network:
       database_network:
@@ -210,7 +216,7 @@ services:
   dispatcher:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "dispatcher"]
     environment: *app-environment
@@ -230,18 +236,18 @@ services:
   external-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "external-download-worker"]
     environment:
       TZ: ${TZ:-UTC}
       APP_ENV: production
-      WORKER_REPORT_URL: http://api:8001/internal/workers
-      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      WORKER_CONTROL_URL: http://172.29.60.10:8000
+      WORKER_TOKEN_FILE: /run/secrets/external_worker_token
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
     secrets:
-      - internal_service_token
+      - external_worker_token
     networks:
       external_download_network:
         ipv4_address: 172.29.60.20
@@ -264,20 +270,20 @@ services:
   telegram-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-download-worker"]
     environment:
       TZ: ${TZ:-UTC}
       APP_ENV: production
-      WORKER_REPORT_URL: http://api:8000/internal/workers
-      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
+      WORKER_CONTROL_URL: http://api:8000
+      WORKER_TOKEN_FILE: /run/secrets/telegram_download_worker_token
       BOT_TOKEN_FILE: /run/secrets/bot_token
       TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
     secrets:
-      - internal_service_token
+      - telegram_download_worker_token
       - bot_token
     networks:
       application_network:
@@ -301,21 +307,22 @@ services:
   telegram-upload-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-upload-worker"]
     environment:
-      <<: *app-environment
+      TZ: ${TZ:-UTC}
+      APP_ENV: production
+      WORKER_CONTROL_URL: http://api:8000
+      WORKER_TOKEN_FILE: /run/secrets/telegram_upload_worker_token
       BOT_TOKEN_FILE: /run/secrets/bot_token
       TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
       TELEGRAM_API_MODE: ${TELEGRAM_API_MODE:-local}
     secrets:
       - bot_token
-      - postgres_app_password
-      - redis_password
+      - telegram_upload_worker_token
     networks:
       application_network:
-      database_network:
       telegram_network:
     volumes:
       - file_storage:/srv/storage/objects:ro
@@ -339,7 +346,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/media:0.5.0
+    image: mdlbot/media:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "media-worker"]
     environment:
@@ -375,7 +382,7 @@ services:
   cleanup-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "cleanup-worker"]
     environment: *app-environment
@@ -400,7 +407,7 @@ services:
   broadcast-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "broadcast-worker"]
     environment:
@@ -427,7 +434,7 @@ services:
   scheduler:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "scheduler"]
     environment: *app-environment
@@ -447,7 +454,7 @@ services:
   usage-collector:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "usage-collector"]
     environment: *app-environment
@@ -535,7 +542,7 @@ services:
   migrate:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -566,7 +573,7 @@ services:
   bootstrap:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.5.0
+    image: mdlbot/app:0.6.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -649,7 +656,7 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/backup:0.5.0
+    image: mdlbot/backup:0.6.0
     profiles: [operations]
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "backup-service"]
@@ -828,6 +835,12 @@ secrets:
     file: ./secrets/redis_password
   internal_service_token:
     file: ./secrets/internal_service_token
+  external_worker_token:
+    file: ./secrets/external_worker_token
+  telegram_download_worker_token:
+    file: ./secrets/telegram_download_worker_token
+  telegram_upload_worker_token:
+    file: ./secrets/telegram_upload_worker_token
   download_signing_key:
     file: ./secrets/download_signing_key
   backup_encryption_key:

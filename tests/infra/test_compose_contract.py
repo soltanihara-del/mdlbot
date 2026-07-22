@@ -230,3 +230,31 @@ def test_nginx_delivery_locations_are_internal_and_range_is_bounded() -> None:
     assert "return 444;" in nginx
     assert "$request_method != POST" in nginx
     assert "$content_type !~*" in nginx
+
+
+def test_worker_credentials_and_data_planes_are_least_privilege() -> None:
+    external = SERVICES["external-download-worker"]
+    assert set(external["secrets"]) == {"external_worker_token"}
+    assert "DATABASE_URL" not in external["environment"]
+    assert "REDIS_URL" not in external["environment"]
+    assert "BOT_TOKEN_FILE" not in external["environment"]
+
+    telegram_download = SERVICES["telegram-download-worker"]
+    assert set(telegram_download["secrets"]) == {
+        "telegram_download_worker_token",
+        "bot_token",
+    }
+    telegram_upload = SERVICES["telegram-upload-worker"]
+    assert set(telegram_upload["secrets"]) == {
+        "telegram_upload_worker_token",
+        "bot_token",
+    }
+    assert "database_network" not in service_networks(telegram_upload)
+    assert any(str(volume).endswith(":ro") for volume in telegram_upload["volumes"])
+
+    api = SERVICES["api"]
+    assert {
+        "external_worker_token",
+        "telegram_download_worker_token",
+        "telegram_upload_worker_token",
+    } <= set(api["secrets"])

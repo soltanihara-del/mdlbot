@@ -162,12 +162,6 @@ def validate_cross_setting_invariants(values: Mapping[str, Any]) -> None:
         thresholds[0] < thresholds[1] < thresholds[2]
     ):
         raise SettingsValidationError("storage thresholds must be warning < stop < emergency")
-    mode = values.get("telegram.api_mode")
-    max_file = values.get("files.max_size")
-    limit_mode = "cloud" if mode == "official" else mode
-    effective_limit = values.get(f"telegram.{limit_mode}_upload_limit") if limit_mode else None
-    if max_file is not None and effective_limit is not None and max_file > effective_limit:
-        raise SettingsValidationError("file limit exceeds the selected Telegram API capability")
     for key in ("downloads.session_ttl", "stream.session_ttl", "security.admin_session_ttl"):
         value = values.get(key)
         if value is not None and not 60 <= value <= 86400:

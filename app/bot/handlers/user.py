@@ -19,9 +19,11 @@ from app.db.models.identity import User
 from app.db.models.product import SupportMessage, SupportTicket
 from app.db.models.admin import Setting
 from datetime import UTC, datetime
+from app.services.admission import AdmissionService
+from app.services.url_policy import normalize_external_url
 
 
-def build_user_router(i18n: LocalizationService) -> Router:
+def build_user_router(i18n: LocalizationService, admission: AdmissionService) -> Router:
     router = Router(name="user")
     users = UserRepository()
 
@@ -95,6 +97,82 @@ def build_user_router(i18n: LocalizationService) -> Router:
             i18n.format(user_record.language_code, "prompt-send-direct-url"),
             reply_markup=cancel_keyboard(i18n, user_record.language_code),
         )
+
+    @router.message(
+        StateFilter(TelegramFileStates.waiting_for_file),
+        F.document | F.video | F.audio | F.animation,
+    )
+    async def receive_telegram_file(
+        message: Message,
+        user_record: User,
+        state: FSMContext,
+        session: AsyncSession,
+    ) -> None:
+        media = message.document or message.video or message.audio or message.animation
+        if media is None:
+            return
+        unknown_row = await session.scalar(
+            select(Setting).where(Setting.key == "queue.unknown_size_reservation")
+        )
+        fallback_size = int(unknown_row.value) if unknown_row is not None else 64 * 1024**2
+        size_known = media.file_size is not None and media.file_size > 0
+        estimated_size = media.file_size if size_known else fallback_size
+        filename = getattr(media, "file_name", None) or f"telegram-{media.file_unique_id}"
+        job, position = await admission.create_job(
+            session,
+            user=user_record,
+            source="telegram",
+            job_type="telegram_download",
+            payload={
+                "telegram_file_id": media.file_id,
+                "telegram_file_unique_id": media.file_unique_id,
+                "filename": filename,
+                "mime_type": getattr(media, "mime_type", None),
+                "size_known": size_known,
+                "progress_chat_id": message.chat.id,
+            },
+            estimated_bytes=int(estimated_size),
+            idempotency_key=f"telegram:{message.chat.id}:{message.message_id}",
+        )
+        progress = await message.answer(
+            i18n.format(user_record.language_code, "job-queued", position=position)
+        )
+        job.payload = {**job.payload, "progress_message_id": progress.message_id}
+        await session.flush()
+        await state.clear()
+
+    @router.message(StateFilter(DirectUrlStates.waiting_for_url), F.text)
+    async def receive_direct_url(
+        message: Message,
+        user_record: User,
+        state: FSMContext,
+        session: AsyncSession,
+    ) -> None:
+        normalized = normalize_external_url(message.text or "")
+        reserve_row = await session.scalar(
+            select(Setting).where(Setting.key == "queue.unknown_size_reservation")
+        )
+        estimated_size = int(reserve_row.value) if reserve_row is not None else 64 * 1024**2
+        job, position = await admission.create_job(
+            session,
+            user=user_record,
+            source="external_url",
+            job_type="external_download",
+            payload={
+                "url": normalized.url,
+                "hostname": normalized.hostname,
+                "size_known": False,
+                "progress_chat_id": message.chat.id,
+            },
+            estimated_bytes=estimated_size,
+            idempotency_key=f"external-url:{message.chat.id}:{message.message_id}",
+        )
+        progress = await message.answer(
+            i18n.format(user_record.language_code, "job-queued", position=position)
+        )
+        job.payload = {**job.payload, "progress_message_id": progress.message_id}
+        await session.flush()
+        await state.clear()
 
     @router.message(F.text.in_(menu_labels(i18n, "menu-my-files")))
     async def my_files(

@@ -60,6 +60,9 @@ class ErrorMiddleware(BaseMiddleware):
                 "permission_denied": "error-permission-denied",
                 "dependency_unavailable": "error-dependency-unavailable",
                 "settings_validation_error": "error-setting-validation",
+                "quota_exceeded": "error-quota-exceeded-generic",
+                "admission_denied": "error-admission-denied",
+                "unsafe_url": "error-unsafe-url",
             }.get(exc.code, "error-application")
             self._log.warning("bot_application_error", error_code=exc.code, context=exc.context)
             if isinstance(event, Update):

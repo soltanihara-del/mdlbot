@@ -26,6 +26,9 @@ from app.core.permissions import AuthorizationService
 from app.core.redis import RedisManager
 from app.core.secrets import read_secret_file
 from app.db.session import Database
+from app.core.settings import SettingsService
+from app.services.admission import AdmissionService
+from app.services.quota import QuotaService
 
 
 BOT_TOKEN_RE = re.compile(r"^[0-9]{6,}:[A-Za-z0-9_-]{20,}$")
@@ -76,6 +79,7 @@ def create_bot_components(
     dispatcher.update.outer_middleware(UserContextMiddleware())
     dispatcher.update.outer_middleware(AccessPolicyMiddleware(i18n, redis))
     authorization = AuthorizationService()
+    admission = AdmissionService(SettingsService(authorization, redis), QuotaService())
     dispatcher.include_router(build_admin_router(i18n, authorization))
-    dispatcher.include_router(build_user_router(i18n))
+    dispatcher.include_router(build_user_router(i18n, admission))
     return BotComponents(bot=bot, dispatcher=dispatcher)

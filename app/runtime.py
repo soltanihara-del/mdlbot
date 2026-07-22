@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime
 import os
 import sys
 from urllib.error import URLError
@@ -16,9 +17,17 @@ from app.core.config import load_settings
 from app.core.errors import ApplicationError, StageBoundaryError
 from app.core.logging import configure_logging, get_logger
 from app.db.session import Database
+from app.background import heartbeat_path, run_background_service
 
 
-IMPLEMENTED_SERVICES = {"api", "bot"}
+IMPLEMENTED_SERVICES = {
+    "api",
+    "bot",
+    "dispatcher",
+    "external-download-worker",
+    "telegram-download-worker",
+    "telegram-upload-worker",
+}
 
 
 async def _bootstrap() -> None:
@@ -47,6 +56,9 @@ def _run(service: str) -> None:
             context={"service": service, "implemented": sorted(IMPLEMENTED_SERVICES)},
         )
     settings = load_settings(service)
+    if service not in {"api", "bot"}:
+        asyncio.run(run_background_service(service, settings))
+        return
     app_path = "app.api.app:application" if service == "api" else "app.bot.server:application"
     port = settings.api_port if service == "api" else settings.bot_internal_port
     uvicorn.run(
@@ -64,6 +76,11 @@ def _healthcheck(service: str) -> None:
     if service not in IMPLEMENTED_SERVICES:
         raise StageBoundaryError("service is not implemented", context={"service": service})
     settings = load_settings(service)
+    if service not in {"api", "bot"}:
+        path = heartbeat_path(service)
+        if not path.is_file() or datetime.now().timestamp() - path.stat().st_mtime > 60:
+            raise RuntimeError("background service heartbeat is stale")
+        return
     try:
         port = settings.api_port if service == "api" else settings.bot_internal_port
         with urlopen(f"http://127.0.0.1:{port}/health/ready", timeout=4) as response:

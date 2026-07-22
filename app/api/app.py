@@ -12,10 +12,20 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.core.config import RuntimeSettings, load_settings
 from app.core.i18n import LocalizationService
+from app.core.errors import QuotaExceeded
 from app.core.logging import configure_logging, get_logger
 from app.core.redis import RedisManager
 from app.db.session import Database
 from app.api.webhook import WebhookProxy
+from app.api.schemas.workers import (
+    ClaimRequest,
+    CompleteRequest,
+    FailRequest,
+    HeartbeatRequest,
+)
+from app.services.quota import QuotaService
+from app.workers.control import WorkerControlService
+from app.workers.auth import WorkerAuthenticator
 
 
 def create_app(
@@ -25,12 +35,16 @@ def create_app(
     redis: RedisManager | None = None,
     localization: LocalizationService | None = None,
     webhook_proxy: WebhookProxy | None = None,
+    worker_control: WorkerControlService | None = None,
+    worker_authenticator: WorkerAuthenticator | None = None,
 ) -> FastAPI:
     runtime = settings or load_settings("api")
     db = database or Database(runtime)
     cache = redis or RedisManager(runtime)
     i18n = localization or LocalizationService(runtime.locales_path)
     proxy = webhook_proxy or WebhookProxy(runtime)
+    workers = worker_control or WorkerControlService(db, cache, QuotaService())
+    worker_auth = worker_authenticator or WorkerAuthenticator(runtime)
     log = get_logger("api")
 
     @asynccontextmanager
@@ -49,6 +63,15 @@ def create_app(
         )
         if runtime.app_env == "production" or webhook_configured:
             await proxy.start()
+        worker_credentials_configured = all(
+            (
+                runtime.external_worker_token_file,
+                runtime.telegram_download_worker_token_file,
+                runtime.telegram_upload_worker_token_file,
+            )
+        )
+        if runtime.app_env == "production" or worker_credentials_configured:
+            worker_auth.start()
         app.state.accepting_requests = True
         log.info("api_started", **runtime.safe_summary())
         try:
@@ -56,6 +79,7 @@ def create_app(
         finally:
             app.state.accepting_requests = False
             await proxy.close()
+            worker_auth.close()
             await cache.close()
             await db.close()
             log.info("api_stopped")
@@ -73,6 +97,7 @@ def create_app(
     app.state.redis = cache
     app.state.localization = i18n
     app.state.webhook_proxy = proxy
+    app.state.worker_control = workers
     app.state.accepting_requests = False
 
     @app.get("/health/live", include_in_schema=False)
@@ -127,6 +152,88 @@ def create_app(
         except Exception:
             return JSONResponse({"ok": False}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
         return JSONResponse({"ok": True})
+
+    def authorize_worker(request: Request, job_type: str) -> JSONResponse | None:
+        try:
+            worker_auth.authenticate(job_type, request.headers.get("authorization"))
+        except Exception:
+            return JSONResponse({"ok": False}, status_code=status.HTTP_401_UNAUTHORIZED)
+        return None
+
+    @app.post("/internal/workers/claim", include_in_schema=False)
+    async def worker_claim(request: Request, body: ClaimRequest) -> JSONResponse:
+        denied = authorize_worker(request, body.job_type)
+        if denied is not None:
+            return denied
+        job = await workers.claim(job_type=body.job_type, worker_id=body.worker_id)
+        return JSONResponse({"ok": True, "job": job})
+
+    @app.post("/internal/workers/heartbeat", include_in_schema=False)
+    async def worker_heartbeat(request: Request, body: HeartbeatRequest) -> JSONResponse:
+        job_type = request.headers.get("x-worker-job-type", "")
+        denied = authorize_worker(request, job_type)
+        if denied is not None:
+            return denied
+        try:
+            accepted = await workers.heartbeat(
+                job_id=body.job_id,
+                generation=body.generation,
+                lease=body.lease,
+                progress=body.progress,
+                expected_job_type=job_type,
+            )
+        except QuotaExceeded:
+            return JSONResponse(
+                {"ok": False, "code": "quota_topup_denied"},
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        return JSONResponse(
+            {"ok": accepted},
+            status_code=200 if accepted else status.HTTP_409_CONFLICT,
+        )
+
+    @app.post("/internal/workers/complete", include_in_schema=False)
+    async def worker_complete(request: Request, body: CompleteRequest) -> JSONResponse:
+        job_type = request.headers.get("x-worker-job-type", "")
+        denied = authorize_worker(request, job_type)
+        if denied is not None:
+            return denied
+        accepted = await workers.complete(
+            job_id=body.job_id,
+            generation=body.generation,
+            lease=body.lease,
+            result=body.result.model_dump(),
+            stream=body.stream,
+            group=body.group,
+            message_id=body.message_id,
+            expected_job_type=job_type,
+        )
+        return JSONResponse(
+            {"ok": accepted},
+            status_code=200 if accepted else status.HTTP_409_CONFLICT,
+        )
+
+    @app.post("/internal/workers/fail", include_in_schema=False)
+    async def worker_fail(request: Request, body: FailRequest) -> JSONResponse:
+        job_type = request.headers.get("x-worker-job-type", "")
+        denied = authorize_worker(request, job_type)
+        if denied is not None:
+            return denied
+        accepted = await workers.fail(
+            job_id=body.job_id,
+            generation=body.generation,
+            lease=body.lease,
+            error_code=body.error_code,
+            actual_bytes=body.actual_bytes,
+            stream=body.stream,
+            group=body.group,
+            message_id=body.message_id,
+            expected_job_type=job_type,
+        )
+        return JSONResponse(
+            {"ok": accepted},
+            status_code=200 if accepted else status.HTTP_409_CONFLICT,
+        )
 
     return app
 

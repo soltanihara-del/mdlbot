@@ -10,3 +10,6 @@ error-quota-exceeded = سهمیه شما تا { $reset_at } تمام شده اس
 error-rate-limited = درخواست‌ها بیش از حد است. { $seconds } ثانیه دیگر تلاش کنید.
 error-file-not-found = فایل درخواستی پیدا نشد.
 error-link-expired = اعتبار این پیوند تمام شده است.
+error-quota-exceeded-generic = این درخواست از سهمیه یا حد هم‌زمانی فعلی شما بیشتر است.
+error-admission-denied = در حال حاضر امکان پذیرش کار پردازشی جدید وجود ندارد.
+error-unsafe-url = این نشانی معتبر نیست یا به مقصد غیرمجاز اشاره می‌کند.

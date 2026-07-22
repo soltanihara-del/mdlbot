@@ -1,4 +1,4 @@
-from app.core.catalogs import PERMISSIONS, PROFILES, ROLES, SETTINGS, validate_catalogs
+from app.core.catalogs import PLANS, PERMISSIONS, PROFILES, ROLES, SETTINGS, validate_catalogs
 
 
 def test_catalogs_are_unique_and_referentially_complete() -> None:
@@ -11,6 +11,8 @@ def test_catalogs_are_unique_and_referentially_complete() -> None:
     }
     assert all(item.name_fa and item.name_en for item in (*PERMISSIONS, *SETTINGS))
     assert all(not item.key.endswith(("password", "token", "secret")) for item in SETTINGS)
+    assert {plan.code for plan in PLANS} == {"normal", "vip"}
+    assert all(plan.concurrent_jobs > 0 and plan.max_file_size > 0 for plan in PLANS)
 
 
 def test_super_admin_catalog_contains_every_permission() -> None:

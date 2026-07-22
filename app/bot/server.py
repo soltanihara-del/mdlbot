@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import asyncio
 from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
@@ -24,6 +25,7 @@ from app.core.redis import RedisManager
 from app.core.secrets import read_secret_file
 from app.db.models.jobs import WebhookUpdate
 from app.db.session import Database
+from app.bot.progress import ProgressNotifier
 
 
 class UpdateDeduplicator:
@@ -108,6 +110,11 @@ def create_bot_app(settings: RuntimeSettings | None = None) -> FastAPI:
         await database.start()
         await redis.start()
         components = create_bot_components(runtime, database, redis, i18n)
+        progress_stop = asyncio.Event()
+        progress_task = asyncio.create_task(
+            ProgressNotifier(database, redis, components.bot, i18n).run(progress_stop),
+            name="bot-progress-notifier",
+        )
         app.state.components = components
         app.state.ready = True
         log.info("bot_started", **runtime.safe_summary())
@@ -115,6 +122,9 @@ def create_bot_app(settings: RuntimeSettings | None = None) -> FastAPI:
             yield
         finally:
             app.state.ready = False
+            progress_stop.set()
+            progress_task.cancel()
+            await asyncio.gather(progress_task, return_exceptions=True)
             await components.bot.session.close()
             await redis.close()
             await database.close()

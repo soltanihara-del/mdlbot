@@ -48,11 +48,19 @@ class RuntimeSettings(BaseSettings):
     telegram_webhook_path_file: Path | None = None
     telegram_webhook_secret_token_file: Path | None = None
     internal_service_token_file: Path | None = None
+    worker_token_file: Path | None = None
+    external_worker_token_file: Path | None = None
+    telegram_download_worker_token_file: Path | None = None
+    telegram_upload_worker_token_file: Path | None = None
     telegram_api_base_url: str = "https://api.telegram.org"
     telegram_api_mode: Literal["local", "official"] = "local"
     bot_internal_url: str = "http://bot:8001"
     bot_internal_host: str = "0.0.0.0"
     bot_internal_port: int = Field(default=8001, ge=1024, le=65535)
+    worker_control_url: str = "http://api:8000"
+    clamav_host: str = "clamav"
+    clamav_port: int = Field(default=3310, ge=1, le=65535)
+    storage_root: Path = Path("/srv/storage/objects")
 
     locales_path: Path = Path("locales")
     default_locale: Literal["fa", "en"] = "fa"
@@ -86,7 +94,7 @@ class RuntimeSettings(BaseSettings):
             raise ValueError("REDIS_URL must use redis or rediss")
         return value
 
-    @field_validator("telegram_api_base_url", "bot_internal_url")
+    @field_validator("telegram_api_base_url", "bot_internal_url", "worker_control_url")
     @classmethod
     def validate_http_url(cls, value: str) -> str:
         normalized = value.rstrip("/")
@@ -132,6 +140,19 @@ class RuntimeSettings(BaseSettings):
         missing = sorted(name for name, value in required.items() if value is None)
         if missing:
             raise ConfigurationError("bot secret-file paths are missing", context={"missing": missing})
+
+    def validate_worker_files(self, *, api: bool) -> None:
+        if api:
+            required = {
+                "EXTERNAL_WORKER_TOKEN_FILE": self.external_worker_token_file,
+                "TELEGRAM_DOWNLOAD_WORKER_TOKEN_FILE": self.telegram_download_worker_token_file,
+                "TELEGRAM_UPLOAD_WORKER_TOKEN_FILE": self.telegram_upload_worker_token_file,
+            }
+        else:
+            required = {"WORKER_TOKEN_FILE": self.worker_token_file}
+        missing = sorted(name for name, value in required.items() if value is None)
+        if missing:
+            raise ConfigurationError("worker secret-file paths are missing", context={"missing": missing})
 
     def safe_summary(self) -> dict[str, str | int | float | None]:
         return {

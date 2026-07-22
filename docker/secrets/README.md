@@ -18,6 +18,9 @@ them as command-line arguments.
 | `postgres_monitor_password` | At least 32 random characters |
 | `redis_password` | At least 32 random characters |
 | `internal_service_token` | 32 random bytes, hex encoded |
+| `external_worker_token` | Dedicated 32-byte token for external downloads |
+| `telegram_download_worker_token` | Dedicated 32-byte token for Telegram downloads |
+| `telegram_upload_worker_token` | Dedicated 32-byte token for Telegram uploads |
 | `download_signing_key` | 32 random bytes, hex encoded |
 | `backup_encryption_key` | 32 random bytes, hex encoded |
 | `grafana_admin_password` | At least 32 random characters |
@@ -35,6 +38,9 @@ openssl rand -hex 32 > secrets/postgres_backup_password
 openssl rand -hex 32 > secrets/postgres_monitor_password
 openssl rand -hex 32 > secrets/redis_password
 openssl rand -hex 32 > secrets/internal_service_token
+openssl rand -hex 32 > secrets/external_worker_token
+openssl rand -hex 32 > secrets/telegram_download_worker_token
+openssl rand -hex 32 > secrets/telegram_upload_worker_token
 openssl rand -hex 32 > secrets/download_signing_key
 openssl rand -hex 32 > secrets/backup_encryption_key
 openssl rand -hex 32 > secrets/grafana_admin_password

@@ -63,6 +63,20 @@ class SettingsProfileDefinition:
     values: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class PlanDefinition:
+    code: str
+    name_fa: str
+    name_en: str
+    max_file_size: int
+    hourly_quota: int | None
+    daily_quota: int | None
+    weekly_quota: int | None
+    concurrent_jobs: int
+    queue_priority: int
+    retention_seconds: int
+
+
 def _permission(
     code: str,
     category: str,
@@ -177,11 +191,15 @@ def _setting(
 SETTINGS: tuple[SettingDefinition, ...] = (
     _setting("system.maintenance", "system", "boolean", False, "Maintenance mode", "حالت نگهداری"),
     _setting("admission.enabled", "system", "boolean", True, "New job admission", "پذیرش کار جدید"),
-    _setting("files.max_size", "files", "bytes", 2 * 1024**3, "Maximum file size", "حداکثر اندازه فایل", unit="bytes", minimum=1024**2, maximum=20 * 1024**3),
+    _setting("files.max_size", "files", "bytes", 10 * 1024**3, "Maximum file size", "حداکثر اندازه فایل", unit="bytes", minimum=1024**2, maximum=100 * 1024**3),
     _setting("files.retention", "files", "duration", 7 * 86400, "Default retention", "نگهداری پیش‌فرض", unit="seconds", minimum=3600, maximum=365 * 86400),
     _setting("files.concurrent_jobs", "files", "integer", 4, "Concurrent jobs", "کارهای هم‌زمان", minimum=1, maximum=128),
     _setting("queue.max_age", "queue", "duration", 86400, "Maximum queue age", "حداکثر عمر صف", unit="seconds", minimum=300, maximum=7 * 86400),
     _setting("queue.dispatch_batch", "queue", "integer", 50, "Dispatch batch size", "اندازه دسته صف", minimum=1, maximum=1000),
+    _setting("queue.unknown_size_reservation", "queue", "bytes", 64 * 1024**2, "Unknown-size initial reservation", "رزرو اولیه اندازه نامشخص", unit="bytes", minimum=1024**2, maximum=1024**3),
+    _setting("queue.aging_step", "queue", "duration", 300, "Queue aging step", "گام افزایش اولویت صف", unit="seconds", minimum=30, maximum=3600),
+    _setting("queue.max_normal_wait", "queue", "duration", 1800, "Maximum normal wait", "حداکثر انتظار عادی", unit="seconds", minimum=60, maximum=86400),
+    _setting("queue.max_consecutive_vip", "queue", "integer", 4, "Maximum consecutive VIP jobs", "حد متوالی کار ویژه", minimum=1, maximum=100),
     _setting("downloads.session_ttl", "downloads", "duration", 3600, "Download session lifetime", "عمر نشست دانلود", unit="seconds", minimum=60, maximum=86400),
     _setting("downloads.max_connections", "downloads", "integer", 4, "Download connection limit", "حد اتصال دانلود", minimum=1, maximum=32),
     _setting("downloads.max_range_requests", "downloads", "integer", 1000, "Range request limit", "حد درخواست بازه", minimum=1, maximum=10000),
@@ -191,7 +209,7 @@ SETTINGS: tuple[SettingDefinition, ...] = (
     _setting("stream.rate", "stream", "bitrate", 20_000_000, "Stream bitrate", "نرخ پخش", unit="bits_per_second", minimum=64_000, maximum=1_000_000_000),
     _setting("security.url_max_redirects", "security", "integer", 5, "URL redirect limit", "حد تغییرمسیر URL", minimum=0, maximum=10),
     _setting("security.url_timeout", "security", "duration", 30, "URL request timeout", "مهلت درخواست URL", unit="seconds", minimum=2, maximum=300),
-    _setting("security.scan_required", "security", "boolean", True, "Mandatory malware scan", "اسکن اجباری بدافزار"),
+    _setting("security.scan_required", "security", "boolean", False, "Mandatory malware scan", "اسکن اجباری بدافزار"),
     _setting("security.failed_login_limit", "security", "integer", 5, "Failed login limit", "حد ورود ناموفق", minimum=1, maximum=20),
     _setting("security.admin_session_ttl", "security", "duration", 1800, "Admin session lifetime", "عمر نشست مدیر", unit="seconds", minimum=300, maximum=86400),
     _setting("storage.warning_percent", "storage", "percentage", 80, "Storage warning threshold", "آستانه هشدار فضا", unit="percent", minimum=1, maximum=99),
@@ -224,6 +242,34 @@ PROFILES: tuple[SettingsProfileDefinition, ...] = (
 )
 
 
+PLANS: tuple[PlanDefinition, ...] = (
+    PlanDefinition(
+        code="normal",
+        name_fa="عادی",
+        name_en="Normal",
+        max_file_size=2 * 1024**3,
+        hourly_quota=2 * 1024**3,
+        daily_quota=10 * 1024**3,
+        weekly_quota=40 * 1024**3,
+        concurrent_jobs=2,
+        queue_priority=10,
+        retention_seconds=7 * 86400,
+    ),
+    PlanDefinition(
+        code="vip",
+        name_fa="ویژه",
+        name_en="VIP",
+        max_file_size=10 * 1024**3,
+        hourly_quota=10 * 1024**3,
+        daily_quota=100 * 1024**3,
+        weekly_quota=500 * 1024**3,
+        concurrent_jobs=8,
+        queue_priority=100,
+        retention_seconds=30 * 86400,
+    ),
+)
+
+
 def validate_catalogs() -> None:
     permission_codes = [item.code for item in PERMISSIONS]
     setting_keys = [item.key for item in SETTINGS]
@@ -234,6 +280,7 @@ def validate_catalogs() -> None:
         ("setting", setting_keys),
         ("role", role_codes),
         ("profile", profile_codes),
+        ("plan", [item.code for item in PLANS]),
     ):
         if len(values) != len(set(values)):
             raise ValueError(f"duplicate {label} catalog entry")

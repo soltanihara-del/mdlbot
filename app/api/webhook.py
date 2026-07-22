@@ -64,6 +64,15 @@ class WebhookProxy:
         ):
             raise PermissionError("invalid Telegram webhook secret")
 
+    def validate_internal(self, authorization: str | None) -> None:
+        expected = f"Bearer {self._internal_token}"
+        if (
+            not self.started
+            or authorization is None
+            or not hmac.compare_digest(authorization, expected)
+        ):
+            raise PermissionError("invalid internal service credential")
+
     async def forward(self, payload: dict[str, Any]) -> None:
         if self._session is None:
             raise ConfigurationError("webhook proxy is not started")

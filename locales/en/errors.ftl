@@ -10,3 +10,6 @@ error-quota-exceeded = Your quota is exhausted until { $reset_at }.
 error-rate-limited = Too many requests. Try again in { $seconds } seconds.
 error-file-not-found = The requested file was not found.
 error-link-expired = This link has expired.
+error-quota-exceeded-generic = The request exceeds your current quota or concurrency limit.
+error-admission-denied = New processing work cannot be accepted right now.
+error-unsafe-url = This URL is invalid or points to a destination that is not allowed.

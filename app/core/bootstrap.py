@@ -8,9 +8,10 @@ from uuid import UUID, uuid5
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.catalogs import PERMISSIONS, PROFILES, ROLES, SETTINGS
+from app.core.catalogs import PERMISSIONS, PLANS, PROFILES, ROLES, SETTINGS
 from app.db.models.admin import Admin, AdminRole, Permission, RolePermission, Setting, SettingsProfile
 from app.db.models.identity import User
+from app.db.models.identity import SubscriptionPlan
 
 
 CATALOG_NAMESPACE = UUID("e46c0ad7-b7ad-4d61-8850-5d1350ad85f2")
@@ -117,6 +118,54 @@ async def seed_catalogs(session: AsyncSession) -> None:
         row.description_en = definition.description_en
         row.values = dict(definition.values)
         row.is_system = definition.code != "custom"
+        row.deleted_at = None
+
+    for definition in PLANS:
+        row = await session.scalar(
+            select(SubscriptionPlan).where(SubscriptionPlan.code == definition.code)
+        )
+        if row is None:
+            row = SubscriptionPlan(
+                id=catalog_id("plan", definition.code),
+                code=definition.code,
+            )
+            session.add(row)
+        row.name_fa = definition.name_fa
+        row.name_en = definition.name_en
+        row.is_active = True
+        row.is_system = True
+        row.max_file_size = definition.max_file_size
+        row.quota_bytes = definition.daily_quota
+        row.quota_window_seconds = 86400
+        row.hourly_quota = definition.hourly_quota
+        row.daily_quota = definition.daily_quota
+        row.weekly_quota = definition.weekly_quota
+        row.max_files_per_window = 100 if definition.code == "normal" else 1000
+        row.concurrent_jobs = definition.concurrent_jobs
+        row.concurrent_downloads = 2 if definition.code == "normal" else 8
+        row.concurrent_streams = 2 if definition.code == "normal" else 8
+        row.storage_quota = definition.daily_quota
+        row.active_link_limit = 10 if definition.code == "normal" else 100
+        row.download_connection_limit = 2 if definition.code == "normal" else 8
+        row.stream_connection_limit = 2 if definition.code == "normal" else 8
+        row.allowed_ips_per_session = 2
+        row.resume_limit = 20 if definition.code == "normal" else 100
+        row.range_request_limit = 1000 if definition.code == "normal" else 10000
+        row.download_rate = 50_000_000 if definition.code == "normal" else None
+        row.stream_rate = 20_000_000 if definition.code == "normal" else None
+        row.retention_seconds = definition.retention_seconds
+        row.public_retention_seconds = definition.retention_seconds
+        row.queue_priority = definition.queue_priority
+        row.media_priority = definition.queue_priority
+        row.max_stream_quality = "720p" if definition.code == "normal" else "original"
+        row.public_share_limit = 3 if definition.code == "normal" else 50
+        row.support_ticket_limit = 1 if definition.code == "normal" else 5
+        row.external_url_enabled = True
+        row.streaming_enabled = True
+        row.public_share_enabled = definition.code == "vip"
+        row.permanent_link_enabled = definition.code == "vip"
+        row.one_time_link_enabled = True
+        row.password_link_enabled = definition.code == "vip"
         row.deleted_at = None
     await session.flush()
 
