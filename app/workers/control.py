@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app import __version__
 from app.core.redis import RedisManager
-from app.db.models.files import File, FileReference
+from app.db.models.files import File, FileReference, MediaSegment, MediaVariant
 from app.db.models.jobs import ApplicationInstance, Job, JobAttempt, JobEvent, OutboxEvent
 from app.db.session import Database
 from app.services.quota import QuotaService
@@ -24,6 +24,7 @@ RUNNING_STATE = {
     "external_download": "downloading",
     "telegram_download": "receiving",
     "telegram_upload": "uploading",
+    "media_process": "processing",
 }
 
 
@@ -297,6 +298,12 @@ class WorkerControlService:
                 await self._complete_upload_locked(session, job, result)
                 scan_failed = False
                 upload_completed = True
+            elif job.job_type == "media_process":
+                if result.get("kind") != "media":
+                    return False
+                await self._complete_media_locked(session, job, result)
+                scan_failed = False
+                upload_completed = False
             else:
                 if result.get("kind") != "download":
                     return False
@@ -395,8 +402,144 @@ class WorkerControlService:
             attempt.finished_at = now
         await self._quota.reconcile(session, job=job, actual_bytes=actual_bytes, success=True)
         await self._schedule_telegram_upload(session, job, file)
+        await self._schedule_media_processing(session, job, file)
         await session.flush()
         return False
+
+    @staticmethod
+    async def _schedule_media_processing(session: Any, parent: Job, file: File) -> None:
+        if not file.detected_mime.startswith(("audio/", "video/")):
+            return
+        idempotency_key = f"media-process:{file.id}"
+        existing = await session.scalar(select(Job.id).where(Job.idempotency_key == idempotency_key))
+        if existing is not None:
+            return
+        media_job = Job(
+            user_id=parent.user_id,
+            source="internal",
+            job_type="media_process",
+            status="queued",
+            queue_class=parent.queue_class,
+            base_priority=parent.base_priority,
+            effective_priority=parent.effective_priority,
+            priority_snapshot={**parent.priority_snapshot, "parent_job_id": str(parent.id)},
+            policy_snapshot=dict(parent.policy_snapshot),
+            payload={
+                "parent_job_id": str(parent.id),
+                "file_id": str(file.id),
+                "storage_key": file.storage_key,
+                "filename": file.safe_display_filename,
+                "size_bytes": file.size_bytes,
+                "detected_mime": file.detected_mime,
+            },
+            result={},
+            idempotency_key=idempotency_key,
+            queued_at=datetime.now(UTC),
+            total_bytes=file.size_bytes,
+        )
+        session.add(media_job)
+        await session.flush()
+        session.add(
+            JobEvent(
+                job_id=media_job.id,
+                event_type="media_processing_scheduled",
+                from_status=None,
+                to_status="queued",
+                actor_type="system",
+                actor_id=None,
+                details={"parent_job_id": str(parent.id), "file_id": str(file.id)},
+            )
+        )
+
+    @staticmethod
+    async def _complete_media_locked(
+        session: Any,
+        job: Job,
+        result: dict[str, Any],
+    ) -> None:
+        now = datetime.now(UTC)
+        file_id = UUID(str(job.payload["file_id"]))
+        file = await session.scalar(select(File).where(File.id == file_id).with_for_update())
+        if file is None or file.status != "available":
+            raise ValueError("media source file is unavailable")
+        if int(result["size_bytes"]) != file.size_bytes:
+            raise ValueError("media result source size does not match")
+        metadata = result.get("metadata")
+        if not isinstance(metadata, dict):
+            raise ValueError("media result metadata is invalid")
+        file.media_metadata = metadata
+        file.direct_play_compatible = bool(result["direct_play_compatible"])
+        for value in result.get("variants", []):
+            variant = MediaVariant(
+                file_id=file.id,
+                job_id=job.id,
+                kind=str(value["kind"]),
+                quality=str(value["quality"]),
+                status="ready",
+                storage_key=str(value["storage_key"]),
+                mime_type=str(value["mime_type"]),
+                size_bytes=int(value["size_bytes"]),
+                metadata_json=dict(value.get("metadata", {})),
+                expires_at=file.expires_at,
+            )
+            session.add(variant)
+            await session.flush()
+            for segment in value.get("segments", []):
+                session.add(
+                    MediaSegment(
+                        variant_id=variant.id,
+                        sequence_number=int(segment["sequence_number"]),
+                        storage_key=str(segment["storage_key"]),
+                        size_bytes=int(segment["size_bytes"]),
+                        duration_ms=int(segment["duration_ms"]),
+                        expires_at=file.expires_at,
+                    )
+                )
+        previous = job.status
+        job.status = "generating_link"
+        session.add(
+            JobEvent(
+                job_id=job.id,
+                event_type="media_variants_persisted",
+                from_status=previous,
+                to_status="generating_link",
+                actor_type="worker",
+                actor_id=job.assigned_instance_id,
+                details={"variant_count": len(result.get("variants", []))},
+            )
+        )
+        await session.flush()
+        job.status = "completed"
+        job.result = {
+            "file_id": str(file.id),
+            "variant_count": len(result.get("variants", [])),
+            "direct_play_compatible": file.direct_play_compatible,
+        }
+        job.progress_stage = "media_ready"
+        job.progress_percent = 100
+        job.bytes_transferred = file.size_bytes
+        job.finished_at = now
+        session.add(
+            JobEvent(
+                job_id=job.id,
+                event_type="media_processing_completed",
+                from_status="generating_link",
+                to_status="completed",
+                actor_type="worker",
+                actor_id=job.assigned_instance_id,
+                details={},
+            )
+        )
+        attempt = await session.scalar(
+            select(JobAttempt).where(
+                JobAttempt.job_id == job.id,
+                JobAttempt.attempt_number == job.attempt_count,
+            )
+        )
+        if attempt is not None:
+            attempt.status = "completed"
+            attempt.finished_at = now
+        await session.flush()
 
     @staticmethod
     async def _schedule_telegram_upload(session: Any, parent: Job, file: File) -> None:

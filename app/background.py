@@ -26,6 +26,7 @@ from app.workers.downloads import (
     TelegramDownloadProcessor,
     TelegramUploadProcessor,
 )
+from app.workers.media import MediaProcessor
 
 
 def heartbeat_path(service: str) -> Path:
@@ -81,6 +82,9 @@ async def run_background_service(service: str, settings: RuntimeSettings) -> Non
             raise ValueError("BOT_TOKEN_FILE is required for Telegram uploads")
         processor = TelegramUploadProcessor(settings)
         job_type = "telegram_upload"
+    elif service == "media-worker":
+        processor = MediaProcessor(settings)
+        job_type = "media_process"
     else:
         raise ValueError(f"unsupported background service: {service}")
     client = WorkerClient(
@@ -113,7 +117,7 @@ async def run_dispatcher(settings: RuntimeSettings, stop: asyncio.Event) -> None
                     await recover_expired_jobs(session)
                     await quota.reconcile_expired(session)
                     batch = int(snapshot.values["queue.dispatch_batch"])
-                    job_types = ("external_download", "telegram_download", "telegram_upload")
+                    job_types = ("external_download", "telegram_download", "telegram_upload", "media_process")
                     for batch_index in range(batch):
                         selected = None
                         for offset in range(len(job_types)):

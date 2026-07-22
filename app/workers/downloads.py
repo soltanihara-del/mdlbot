@@ -82,12 +82,20 @@ def sniff_mime(path: Path, filename: str) -> str:
         (b"GIF8", "image/gif"),
         (b"%PDF-", "application/pdf"),
         (b"PK\x03\x04", "application/zip"),
+        (b"\x1aE\xdf\xa3", "video/x-matroska"),
+        (b"ID3", "audio/mpeg"),
+        (b"OggS", "audio/ogg"),
+        (b"fLaC", "audio/flac"),
     )
     for signature, mime in signatures:
         if prefix.startswith(signature):
             return mime
     if len(prefix) >= 12 and prefix[4:8] == b"ftyp":
         return "video/mp4"
+    if len(prefix) >= 12 and prefix.startswith(b"RIFF") and prefix[8:12] == b"WAVE":
+        return "audio/wav"
+    if len(prefix) >= 2 and prefix[0] == 0xFF and prefix[1] & 0xE0 == 0xE0:
+        return "audio/mpeg"
     return "application/octet-stream"
 
 

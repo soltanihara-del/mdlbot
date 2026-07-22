@@ -36,6 +36,15 @@ class TelegramUploadResult:
     size_bytes: int
 
 
+@dataclass(frozen=True, slots=True)
+class MediaWorkerResult:
+    kind: str
+    size_bytes: int
+    direct_play_compatible: bool
+    metadata: dict[str, Any]
+    variants: list[dict[str, Any]]
+
+
 class WorkerFailure(Exception):
     def __init__(self, code: str, *, actual_bytes: int = 0) -> None:
         super().__init__(code)
@@ -46,7 +55,7 @@ class WorkerFailure(Exception):
 ProgressCallback = Callable[[dict[str, Any]], Awaitable[None]]
 Processor = Callable[
     [dict[str, Any], ProgressCallback],
-    Awaitable[WorkerResult | TelegramUploadResult],
+    Awaitable[WorkerResult | TelegramUploadResult | MediaWorkerResult],
 ]
 
 

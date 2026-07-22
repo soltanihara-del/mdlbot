@@ -30,6 +30,7 @@ from app.core.settings import SettingsService
 from app.services.admission import AdmissionService
 from app.services.quota import QuotaService
 from app.services.downloads import DownloadService
+from app.services.streaming import StreamService
 
 
 BOT_TOKEN_RE = re.compile(r"^[0-9]{6,}:[A-Za-z0-9_-]{20,}$")
@@ -86,6 +87,11 @@ def create_bot_components(
         if settings.download_signing_key_file is not None
         else None
     )
+    streams = (
+        StreamService(settings, redis)
+        if settings.stream_signing_key_file is not None
+        else None
+    )
     dispatcher.include_router(build_admin_router(i18n, authorization))
-    dispatcher.include_router(build_user_router(i18n, admission, downloads))
+    dispatcher.include_router(build_user_router(i18n, admission, downloads, streams))
     return BotComponents(bot=bot, dispatcher=dispatcher)

@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
-JobType = Literal["external_download", "telegram_download", "telegram_upload"]
+JobType = Literal["external_download", "telegram_download", "telegram_upload", "media_process"]
 
 
 class ClaimRequest(BaseModel):
@@ -77,8 +77,47 @@ class TelegramUploadCompletionResult(BaseModel):
         return value
 
 
+class MediaSegmentResult(BaseModel):
+    sequence_number: int = Field(ge=0, le=100_000)
+    storage_key: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9/_.-]{1,510}$")
+    size_bytes: int = Field(ge=0, le=10 * 1024**3)
+    duration_ms: int = Field(gt=0, le=120_000)
+
+    @field_validator("storage_key")
+    @classmethod
+    def prevent_segment_escape(cls, value: str) -> str:
+        if value.startswith("/") or ".." in value.split("/"):
+            raise ValueError("segment key escapes its managed root")
+        return value
+
+
+class MediaVariantResult(BaseModel):
+    kind: Literal["remux", "transcode", "hls"]
+    quality: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$")
+    storage_key: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9/_.-]{1,510}$")
+    mime_type: str = Field(min_length=3, max_length=255)
+    size_bytes: int = Field(ge=0, le=100 * 1024**3)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    segments: list[MediaSegmentResult] = Field(default_factory=list, max_length=100_000)
+
+    @field_validator("storage_key")
+    @classmethod
+    def prevent_variant_escape(cls, value: str) -> str:
+        if value.startswith("/") or ".." in value.split("/"):
+            raise ValueError("variant key escapes its managed root")
+        return value
+
+
+class MediaCompletionResult(BaseModel):
+    kind: Literal["media"]
+    size_bytes: int = Field(ge=0, le=100 * 1024**3)
+    direct_play_compatible: bool
+    metadata: dict[str, Any]
+    variants: list[MediaVariantResult] = Field(default_factory=list, max_length=8)
+
+
 CompletionResult = Annotated[
-    DownloadCompletionResult | TelegramUploadCompletionResult,
+    DownloadCompletionResult | TelegramUploadCompletionResult | MediaCompletionResult,
     Field(discriminator="kind"),
 ]
 

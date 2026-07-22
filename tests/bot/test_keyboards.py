@@ -5,7 +5,13 @@ from app.bot.callbacks import (
     MenuCallback,
     FileCallback,
 )
-from app.bot.keyboards import ADMIN_SECTIONS, admin_menu, language_keyboard, main_menu
+from app.bot.keyboards import (
+    ADMIN_SECTIONS,
+    admin_menu,
+    file_actions_keyboard,
+    language_keyboard,
+    main_menu,
+)
 from app.core.i18n import LocalizationService
 from uuid import UUID
 
@@ -47,3 +53,17 @@ def test_admin_keyboard_hides_unauthorized_sections() -> None:
     callbacks = {row[0].callback_data for row in keyboard.inline_keyboard}
     assert callbacks == {"adm:settings", "adm:users"}
     assert len(callbacks) < len(ADMIN_SECTIONS)
+
+
+def test_media_file_actions_add_only_the_allowed_players() -> None:
+    keyboard = file_actions_keyboard(
+        service(),
+        "en",
+        UUID("019ac0f2-34b3-7ccf-9fa9-9b9aa918bfba"),
+        can_watch=True,
+        can_listen=False,
+    )
+    callbacks = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert callbacks[0].startswith("file:download:")
+    assert callbacks[1].startswith("file:watch:")
+    assert all("listen" not in value for value in callbacks)

@@ -64,6 +64,7 @@ class ErrorMiddleware(BaseMiddleware):
                 "admission_denied": "error-admission-denied",
                 "unsafe_url": "error-unsafe-url",
                 "download_denied": "error-download-denied",
+                "stream_denied": "error-stream-denied",
             }.get(exc.code, "error-application")
             self._log.warning("bot_application_error", error_code=exc.code, context=exc.context)
             if isinstance(event, Update):

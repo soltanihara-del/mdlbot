@@ -142,6 +142,12 @@ class AdmissionService:
             "telegram_capability_source": (
                 capability.verification_source if capability is not None else "configured_default"
             ),
+            "media_probe_timeout": int(settings["media.probe_timeout"]),
+            "media_process_timeout": int(settings["media.process_timeout"]),
+            "media_transcode_enabled": bool(settings["media.transcode_enabled"]),
+            "media_hls_enabled": bool(settings["media.hls_enabled"]),
+            "media_hls_segment_seconds": int(settings["media.hls_segment_seconds"]),
+            "max_stream_quality": plan.max_stream_quality,
             "captured_at": datetime.now(UTC).isoformat(),
         }
 

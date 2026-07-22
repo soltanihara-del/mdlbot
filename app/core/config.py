@@ -49,10 +49,12 @@ class RuntimeSettings(BaseSettings):
     telegram_webhook_secret_token_file: Path | None = None
     internal_service_token_file: Path | None = None
     download_signing_key_file: Path | None = None
+    stream_signing_key_file: Path | None = None
     worker_token_file: Path | None = None
     external_worker_token_file: Path | None = None
     telegram_download_worker_token_file: Path | None = None
     telegram_upload_worker_token_file: Path | None = None
+    media_worker_token_file: Path | None = None
     telegram_api_base_url: str = "https://api.telegram.org"
     telegram_api_mode: Literal["local", "official"] = "local"
     bot_internal_url: str = "http://bot:8001"
@@ -62,6 +64,8 @@ class RuntimeSettings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     storage_root: Path = Path("/srv/storage/objects")
+    media_root: Path = Path("/srv/storage/media")
+    hls_root: Path = Path("/srv/storage/hls")
     usage_logs_path: Path = Path("/var/log/mdlbot")
 
     locales_path: Path = Path("locales")
@@ -149,6 +153,7 @@ class RuntimeSettings(BaseSettings):
                 "EXTERNAL_WORKER_TOKEN_FILE": self.external_worker_token_file,
                 "TELEGRAM_DOWNLOAD_WORKER_TOKEN_FILE": self.telegram_download_worker_token_file,
                 "TELEGRAM_UPLOAD_WORKER_TOKEN_FILE": self.telegram_upload_worker_token_file,
+                "MEDIA_WORKER_TOKEN_FILE": self.media_worker_token_file,
             }
         else:
             required = {"WORKER_TOKEN_FILE": self.worker_token_file}

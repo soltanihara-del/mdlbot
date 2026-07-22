@@ -15,6 +15,7 @@ def _settings(tmp_path: Path, *, duplicate: bool = False) -> RuntimeSettings:
         "external": "e" * 40,
         "telegram_download": "d" * 40,
         "telegram_upload": ("d" if duplicate else "u") * 40,
+        "media": "m" * 40,
     }
     paths = {}
     for name, value in values.items():
@@ -26,6 +27,7 @@ def _settings(tmp_path: Path, *, duplicate: bool = False) -> RuntimeSettings:
         external_worker_token_file=paths["external"],
         telegram_download_worker_token_file=paths["telegram_download"],
         telegram_upload_worker_token_file=paths["telegram_upload"],
+        media_worker_token_file=paths["media"],
     )
 
 
@@ -35,6 +37,7 @@ def test_worker_credentials_are_strictly_scoped(tmp_path: Path) -> None:
     assert auth.authenticate("external_download", f"Bearer {'e' * 40}") == "external_download"
     with pytest.raises(PermissionError):
         auth.authenticate("telegram_download", f"Bearer {'e' * 40}")
+    assert auth.authenticate("media_process", f"Bearer {'m' * 40}") == "media_process"
 
 
 def test_duplicate_worker_credentials_are_rejected(tmp_path: Path) -> None:
@@ -78,5 +81,42 @@ def test_upload_result_requires_telegram_discriminator_fields() -> None:
                 "group": "workers:telegram_upload",
                 "message_id": "1-0",
                 "result": {"kind": "telegram_upload", "size_bytes": 1},
+            }
+        )
+
+
+def test_media_result_rejects_segment_path_escape() -> None:
+    with pytest.raises(ValidationError):
+        CompleteRequest.model_validate(
+            {
+                "job_id": "019ac0f2-34b3-7ccf-9fa9-9b9aa918bfba",
+                "generation": 1,
+                "lease": "x" * 32,
+                "stream": "mdlbot:stream:jobs:media_process:normal",
+                "group": "workers:media_process",
+                "message_id": "1-0",
+                "result": {
+                    "kind": "media",
+                    "size_bytes": 1,
+                    "direct_play_compatible": False,
+                    "metadata": {},
+                    "variants": [
+                        {
+                            "kind": "hls",
+                            "quality": "source",
+                            "storage_key": "job/index.m3u8",
+                            "mime_type": "application/vnd.apple.mpegurl",
+                            "size_bytes": 1,
+                            "segments": [
+                                {
+                                    "sequence_number": 0,
+                                    "storage_key": "job/../secret",
+                                    "size_bytes": 1,
+                                    "duration_ms": 1000,
+                                }
+                            ],
+                        }
+                    ],
+                },
             }
         )

@@ -18,6 +18,7 @@ def valid_event() -> dict[str, object]:
         "file_id": str(uuid4()),
         "user_id": str(uuid4()),
         "range": "bytes=100-1123",
+        "purpose": "download",
     }
 
 

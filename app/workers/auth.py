@@ -23,6 +23,7 @@ class WorkerAuthenticator:
             "external_download": self._settings.external_worker_token_file,
             "telegram_download": self._settings.telegram_download_worker_token_file,
             "telegram_upload": self._settings.telegram_upload_worker_token_file,
+            "media_process": self._settings.media_worker_token_file,
         }
         self._tokens = {
             job_type: read_secret_file(path, minimum_length=32)  # type: ignore[arg-type]

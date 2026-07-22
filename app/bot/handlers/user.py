@@ -18,6 +18,7 @@ from app.bot.keyboards import (
     language_keyboard,
     main_menu,
     menu_labels,
+    player_url_keyboard,
 )
 from app.bot.repositories import UserRepository
 from app.bot.states import DirectUrlStates, LanguageStates, SupportStates, TelegramFileStates
@@ -30,12 +31,16 @@ from app.services.admission import AdmissionService
 from app.services.url_policy import normalize_external_url
 from app.services.downloads import DownloadService
 from app.core.errors import DownloadDenied
+from app.services.streaming import StreamService
+from app.core.errors import StreamDenied
+from app.db.models.files import File
 
 
 def build_user_router(
     i18n: LocalizationService,
     admission: AdmissionService,
     downloads: DownloadService | None = None,
+    streams: StreamService | None = None,
 ) -> Router:
     router = Router(name="user")
     users = UserRepository()
@@ -199,6 +204,8 @@ def build_user_router(
             return
         await message.answer(i18n.format(user_record.language_code, "my-files-title"))
         for item in files:
+            file = await session.scalar(select(File).where(File.id == item.file_id))
+            mime = file.detected_mime if file is not None else ""
             await message.answer(
                 i18n.format(
                 user_record.language_code,
@@ -210,6 +217,40 @@ def build_user_router(
                     i18n,
                     user_record.language_code,
                     item.file_id,
+                    can_watch=mime.startswith("video/"),
+                    can_listen=mime.startswith(("audio/", "video/")),
+                ),
+            )
+
+    @router.callback_query(FileCallback.filter(F.action.in_({"watch", "listen"})))
+    async def create_player_link(
+        callback: CallbackQuery,
+        callback_data: FileCallback,
+        user_record: User,
+        session: AsyncSession,
+    ) -> None:
+        if streams is None:
+            raise StreamDenied("stream service is not configured")
+        media_kind = "video" if callback_data.action == "watch" else "audio"
+        grant = await streams.create_token(
+            session,
+            user=user_record,
+            file_id=callback_data.file_id,
+            media_kind=media_kind,
+        )
+        await callback.answer()
+        if isinstance(callback.message, Message):
+            await callback.message.answer(
+                i18n.format(
+                    user_record.language_code,
+                    "stream-link-ready",
+                    expires=grant.expires_at.isoformat(timespec="minutes"),
+                ),
+                reply_markup=player_url_keyboard(
+                    i18n,
+                    user_record.language_code,
+                    grant.url,
+                    media_kind,
                 ),
             )
 

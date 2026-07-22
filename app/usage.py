@@ -19,7 +19,7 @@ from app.core.config import RuntimeSettings
 from app.core.logging import get_logger
 from app.core.redis import RedisManager
 from app.core.secrets import read_secret_file
-from app.db.models.files import BandwidthUsage, DownloadSession, File
+from app.db.models.files import BandwidthUsage, DownloadSession, File, StreamSession
 from app.db.models.identity import UsageRecord
 from app.db.session import Database
 
@@ -40,6 +40,7 @@ class UsageEvent:
     user_id: UUID
     range_start: int | None
     range_end: int | None
+    purpose: str
 
 
 def parse_usage_event(value: str) -> UsageEvent | None:
@@ -59,6 +60,9 @@ def parse_usage_event(value: str) -> UsageEvent | None:
         file_id = UUID(str(item["file_id"]))
         user_id = UUID(str(item["user_id"]))
         remote_addr = str(item["remote_addr"])
+        purpose = str(item["purpose"])
+        if purpose not in {"download", "stream"}:
+            return None
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
     start = end = None
@@ -78,6 +82,7 @@ def parse_usage_event(value: str) -> UsageEvent | None:
         user_id=user_id,
         range_start=start,
         range_end=end,
+        purpose=purpose,
     )
 
 
@@ -116,6 +121,17 @@ class UsageCollector:
             raise ValueError("download signing key must be hexadecimal") from exc
         if len(self._key) != 32:
             raise ValueError("download signing key must contain exactly 32 bytes")
+        if settings.stream_signing_key_file is None:
+            raise ValueError("STREAM_SIGNING_KEY_FILE is required")
+        stream_raw = read_secret_file(settings.stream_signing_key_file, minimum_length=64)
+        try:
+            self._stream_key = bytes.fromhex(stream_raw)
+        except ValueError as exc:
+            raise ValueError("stream signing key must be hexadecimal") from exc
+        if len(self._stream_key) != 32:
+            raise ValueError("stream signing key must contain exactly 32 bytes")
+        if hmac.compare_digest(self._key, self._stream_key):
+            raise ValueError("download and stream signing keys must be distinct")
         self._settings = settings
         self._database = database
         self._redis = redis
@@ -149,7 +165,7 @@ class UsageCollector:
             offset = 0
         lines, new_offset = await asyncio.to_thread(read_complete_lines, path, offset)
         events = [event for line in lines if (event := parse_usage_event(line)) is not None]
-        released: list[UUID] = []
+        released: list[tuple[str, UUID]] = []
         if events:
             async with self._database.transaction() as session:
                 for event in events:
@@ -159,11 +175,11 @@ class UsageCollector:
                             user_id=event.user_id,
                             file_id=event.file_id,
                             token_id=event.link_id,
-                            session_type="download",
+                            session_type=event.purpose,
                             session_id=event.session_id,
-                            purpose="download",
+                            purpose=event.purpose,
                             source_ip_hash=hmac.new(
-                                self._key,
+                                self._key if event.purpose == "download" else self._stream_key,
                                 b"ip:" + event.remote_addr.encode("utf-8"),
                                 hashlib.sha256,
                             ).digest(),
@@ -181,18 +197,23 @@ class UsageCollector:
                     )
                     if inserted is None:
                         continue
-                    download_session = await session.scalar(
-                        select(DownloadSession)
-                        .where(DownloadSession.id == event.session_id)
+                    session_model = DownloadSession if event.purpose == "download" else StreamSession
+                    tracked_session = await session.scalar(
+                        select(session_model)
+                        .where(session_model.id == event.session_id)
                         .with_for_update()
                     )
-                    if download_session is not None:
-                        download_session.bytes_served += event.response_bytes
-                        download_session.active_connections = max(
+                    if tracked_session is not None:
+                        tracked_session.bytes_served += event.response_bytes
+                        tracked_session.active_connections = max(
                             0,
-                            download_session.active_connections - 1,
+                            tracked_session.active_connections - 1,
                         )
-                        if event.range_start is None and event.range_end is None:
+                        if (
+                            event.purpose == "download"
+                            and event.range_start is None
+                            and event.range_end is None
+                        ):
                             file_size = await session.scalar(
                                 select(File.size_bytes).where(File.id == event.file_id)
                             )
@@ -201,7 +222,7 @@ class UsageCollector:
                                 and event.status == 200
                                 and event.response_bytes >= file_size
                             ):
-                                download_session.status = "completed"
+                                tracked_session.status = "completed"
                     if event.response_bytes > 0:
                         session.add(
                             UsageRecord(
@@ -215,10 +236,10 @@ class UsageCollector:
                                 metadata_json={"http_status": event.status},
                             )
                         )
-                    released.append(event.session_id)
+                    released.append((event.purpose, event.session_id))
                 await session.flush()
-        for session_id in released:
-            key = self._redis.key("download", "connections", str(session_id))
+        for purpose, session_id in released:
+            key = self._redis.key(purpose, "connections", str(session_id))
             await self._redis.client.eval(
                 """
                 local current = tonumber(redis.call('GET', KEYS[1]) or '0')

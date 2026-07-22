@@ -101,17 +101,37 @@ def file_actions_keyboard(
     i18n: LocalizationService,
     locale: str,
     file_id,
+    *,
+    can_watch: bool = False,
+    can_listen: bool = False,
 ) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=i18n.format(locale, "action-download-file"),
+                callback_data=FileCallback(action="download", file_id=file_id).pack(),
+            )
+        ]
+    ]
+    if can_watch:
+        rows.append(
             [
                 InlineKeyboardButton(
-                    text=i18n.format(locale, "action-download-file"),
-                    callback_data=FileCallback(action="download", file_id=file_id).pack(),
+                    text=i18n.format(locale, "action-watch-online"),
+                    callback_data=FileCallback(action="watch", file_id=file_id).pack(),
                 )
             ]
-        ]
-    )
+        )
+    if can_listen:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=i18n.format(locale, "action-listen-online"),
+                    callback_data=FileCallback(action="listen", file_id=file_id).pack(),
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def download_url_keyboard(
@@ -123,4 +143,16 @@ def download_url_keyboard(
         inline_keyboard=[
             [InlineKeyboardButton(text=i18n.format(locale, "action-download-file"), url=url)]
         ]
+    )
+
+
+def player_url_keyboard(
+    i18n: LocalizationService,
+    locale: str,
+    url: str,
+    media_kind: str,
+) -> InlineKeyboardMarkup:
+    key = "action-watch-online" if media_kind == "video" else "action-listen-online"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=i18n.format(locale, key), url=url)]]
     )

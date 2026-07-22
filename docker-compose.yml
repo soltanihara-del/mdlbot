@@ -128,7 +128,7 @@ services:
   bot:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "bot"]
     environment:
@@ -138,6 +138,7 @@ services:
       TELEGRAM_WEBHOOK_SECRET_TOKEN_FILE: /run/secrets/telegram_webhook_secret_token
       INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
       DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+      STREAM_SIGNING_KEY_FILE: /run/secrets/stream_signing_key
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN must be set}
       TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-http://telegram-bot-api:8081}
       TELEGRAM_API_MODE: ${TELEGRAM_API_MODE:-local}
@@ -150,6 +151,7 @@ services:
       - redis_password
       - internal_service_token
       - download_signing_key
+      - stream_signing_key
     networks:
       application_network:
       database_network:
@@ -166,7 +168,7 @@ services:
   api:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "api"]
     environment:
@@ -176,10 +178,12 @@ services:
       TELEGRAM_WEBHOOK_SECRET_TOKEN_FILE: /run/secrets/telegram_webhook_secret_token
       INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
       DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+      STREAM_SIGNING_KEY_FILE: /run/secrets/stream_signing_key
       BOT_INTERNAL_URL: http://bot:8001
       EXTERNAL_WORKER_TOKEN_FILE: /run/secrets/external_worker_token
       TELEGRAM_DOWNLOAD_WORKER_TOKEN_FILE: /run/secrets/telegram_download_worker_token
       TELEGRAM_UPLOAD_WORKER_TOKEN_FILE: /run/secrets/telegram_upload_worker_token
+      MEDIA_WORKER_TOKEN_FILE: /run/secrets/media_worker_token
     secrets:
       - bot_token
       - telegram_webhook_path
@@ -188,9 +192,11 @@ services:
       - redis_password
       - internal_service_token
       - download_signing_key
+      - stream_signing_key
       - external_worker_token
       - telegram_download_worker_token
       - telegram_upload_worker_token
+      - media_worker_token
     networks:
       application_network:
       database_network:
@@ -219,7 +225,7 @@ services:
   dispatcher:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "dispatcher"]
     environment: *app-environment
@@ -239,7 +245,7 @@ services:
   external-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "external-download-worker"]
     environment:
@@ -273,7 +279,7 @@ services:
   telegram-download-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-download-worker"]
     environment:
@@ -310,7 +316,7 @@ services:
   telegram-upload-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "telegram-upload-worker"]
     environment:
@@ -349,27 +355,26 @@ services:
         PYTHON_IMAGE: python:3.12.13-slim-bookworm
         APP_UID: "10001"
         APP_GID: "10001"
-    image: mdlbot/media:0.7.0
+    image: mdlbot/media:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "media-worker"]
     environment:
       TZ: ${TZ:-UTC}
       APP_ENV: production
-      WORKER_REPORT_URL: http://api:8000/internal/workers
-      INTERNAL_SERVICE_TOKEN_FILE: /run/secrets/internal_service_token
-      CLAMAV_HOST: clamav
-      CLAMAV_PORT: "3310"
+      WORKER_CONTROL_URL: http://api:8000
+      WORKER_TOKEN_FILE: /run/secrets/media_worker_token
+      STORAGE_ROOT: /srv/storage/objects
+      MEDIA_ROOT: /srv/storage/media
+      HLS_ROOT: /srv/storage/hls
     secrets:
-      - internal_service_token
+      - media_worker_token
     networks:
       application_network:
       media_network:
-      scanner_network:
     volumes:
       - file_storage:/srv/storage/objects:ro
       - media_storage:/srv/storage/media
       - hls_storage:/srv/storage/hls
-      - quarantine_storage:/srv/storage/quarantine
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=0700,size=512m,noexec,nosuid,nodev
     depends_on:
@@ -385,7 +390,7 @@ services:
   cleanup-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "cleanup-worker"]
     environment: *app-environment
@@ -410,7 +415,7 @@ services:
   broadcast-worker:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "broadcast-worker"]
     environment:
@@ -437,7 +442,7 @@ services:
   scheduler:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "scheduler"]
     environment: *app-environment
@@ -457,16 +462,18 @@ services:
   usage-collector:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     user: "10001:10001"
     command: ["python", "-m", "app.runtime", "run", "usage-collector"]
     environment:
       <<: *app-environment
       DOWNLOAD_SIGNING_KEY_FILE: /run/secrets/download_signing_key
+      STREAM_SIGNING_KEY_FILE: /run/secrets/stream_signing_key
     secrets:
       - postgres_app_password
       - redis_password
       - download_signing_key
+      - stream_signing_key
     networks:
       application_network:
       database_network:
@@ -550,7 +557,7 @@ services:
   migrate:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -581,7 +588,7 @@ services:
   bootstrap:
     <<: *hardened
     build: *app-build
-    image: mdlbot/app:0.7.0
+    image: mdlbot/app:0.8.0
     profiles: [operations]
     restart: "no"
     user: "10001:10001"
@@ -849,8 +856,12 @@ secrets:
     file: ./secrets/telegram_download_worker_token
   telegram_upload_worker_token:
     file: ./secrets/telegram_upload_worker_token
+  media_worker_token:
+    file: ./secrets/media_worker_token
   download_signing_key:
     file: ./secrets/download_signing_key
+  stream_signing_key:
+    file: ./secrets/stream_signing_key
   backup_encryption_key:
     file: ./secrets/backup_encryption_key
   grafana_admin_password:

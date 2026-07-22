@@ -28,6 +28,7 @@ IMPLEMENTED_SERVICES = {
     "telegram-download-worker",
     "telegram-upload-worker",
     "usage-collector",
+    "media-worker",
 }
 
 

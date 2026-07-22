@@ -29,6 +29,7 @@ my-files-list = <b>فایل‌های اخیر شما</b>
     { $items }
 my-files-item = • { $filename } — { $expires }
 download-link-ready = لینک امن دانلود شما آماده است و تا { $expires } اعتبار دارد.
+stream-link-ready = لینک امن پخش شما آماده است و تا { $expires } اعتبار دارد.
 account-summary = وضعیت حساب: <b>{ $status }</b>
     زبان رابط: { $locale }
 settings-language = زبان رابط را انتخاب کنید.

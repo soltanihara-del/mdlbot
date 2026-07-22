@@ -61,6 +61,10 @@ class DownloadDenied(ApplicationError):
     code = "download_denied"
 
 
+class StreamDenied(ApplicationError):
+    code = "stream_denied"
+
+
 class LocalizationError(ApplicationError):
     code = "localization_error"
 

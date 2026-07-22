@@ -51,6 +51,11 @@ class EffectivePlan:
     range_request_limit: int
     download_rate: int | None
     one_time_link_enabled: bool
+    concurrent_streams: int
+    stream_connection_limit: int
+    stream_rate: int | None
+    max_stream_quality: str
+    streaming_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +237,11 @@ class QuotaService:
             range_request_limit=plan.range_request_limit,
             download_rate=plan.download_rate,
             one_time_link_enabled=plan.one_time_link_enabled,
+            concurrent_streams=plan.concurrent_streams,
+            stream_connection_limit=plan.stream_connection_limit,
+            stream_rate=plan.stream_rate,
+            max_stream_quality=plan.max_stream_quality,
+            streaming_enabled=plan.streaming_enabled,
         )
         override = await session.scalar(
             select(UserQuotaOverride)

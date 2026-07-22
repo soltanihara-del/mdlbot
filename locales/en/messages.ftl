@@ -29,6 +29,7 @@ my-files-list = <b>Your recent files</b>
     { $items }
 my-files-item = • { $filename } — { $expires }
 download-link-ready = Your secure download link is ready and remains valid until { $expires }.
+stream-link-ready = Your secure player link is ready and remains valid until { $expires }.
 account-summary = Account status: <b>{ $status }</b>
     Interface language: { $locale }
 settings-language = Choose your interface language.

@@ -8,3 +8,4 @@ web-range-error = The requested media range is invalid.
 web-network-error = The network connection was interrupted.
 download-error-title = Download unavailable
 download-error-generic = This download link is invalid, expired, restricted, or no longer available.
+web-player-help = Playback supports seeking and resume while this secure session remains valid.

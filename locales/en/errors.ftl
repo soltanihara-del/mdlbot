@@ -14,3 +14,4 @@ error-quota-exceeded-generic = The request exceeds your current quota or concurr
 error-admission-denied = New processing work cannot be accepted right now.
 error-unsafe-url = This URL is invalid or points to a destination that is not allowed.
 error-download-denied = A secure download link could not be created for this file.
+error-stream-denied = Secure playback is not available for this file or account.

@@ -92,7 +92,6 @@ def test_untrusted_workers_have_the_expected_network_boundaries() -> None:
     assert media_networks == {
         "application_network",
         "media_network",
-        "scanner_network",
     }
     assert COMPOSE["networks"]["media_network"]["internal"] is True
     assert COMPOSE["networks"]["scanner_network"]["internal"] is True
@@ -244,6 +243,12 @@ def test_download_key_is_available_only_to_required_services() -> None:
         if "download_signing_key" in service.get("secrets", [])
     }
     assert users == {"api", "bot", "usage-collector"}
+    stream_users = {
+        name
+        for name, service in SERVICES.items()
+        if "stream_signing_key" in service.get("secrets", [])
+    }
+    assert stream_users == {"api", "bot", "usage-collector"}
     assert SERVICES["usage-collector"]["volumes"] == ["nginx_logs:/var/log/mdlbot:ro"]
 
 
