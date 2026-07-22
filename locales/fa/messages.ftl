@@ -9,3 +9,27 @@ file-ready = فایل شما آماده است.
 maintenance-active = سرویس موقتاً در حالت نگهداری است.
 support-ticket-created = تیکت <code>{ $ticket }</code> ایجاد شد.
 settings-saved = تنظیم <code>{ $key }</code> با نسخه { $version } ذخیره شد.
+main-menu-prompt = یک گزینه را از منو انتخاب کنید.
+prompt-send-telegram-file = فایل تلگرامی موردنظر برای پردازش را ارسال کنید.
+prompt-send-direct-url = یک نشانی مستقیم HTTP یا HTTPS ارسال کنید.
+my-files-empty = فایل فعالی ندارید.
+my-files-list = <b>فایل‌های اخیر شما</b>
+    { $items }
+my-files-item = • { $filename } — { $expires }
+account-summary = وضعیت حساب: <b>{ $status }</b>
+    زبان رابط: { $locale }
+settings-language = زبان رابط را انتخاب کنید.
+help-message = برای ارسال فایل یا نشانی و مشاهده فایل‌ها، حساب و تنظیمات از منو استفاده کنید. برای توقف فرایند /cancel را بفرستید.
+forced-join-required = ابتدا در کانال‌های الزامی عضو شوید و سپس درخواست را تکرار کنید.
+access-banned = دسترسی شما محدود شده است: { $reason }
+user-status-active = فعال
+user-status-restricted = محدودشده
+user-status-banned = مسدود
+user-status-deleted = حذف‌شده
+language-name-fa = فارسی
+language-name-en = انگلیسی
+support-subject-prompt = یک عنوان کوتاه برای تیکت پشتیبانی ارسال کنید.
+support-subject-invalid = عنوان باید بین ۳ تا ۵۱۲ نویسه باشد.
+support-message-prompt = مشکل را در یک پیام توضیح دهید.
+support-message-invalid = پیام باید بین ۲ تا ۸۰۰۰ نویسه باشد.
+support-limit-reached = به سقف تیکت‌های باز رسیده‌اید.

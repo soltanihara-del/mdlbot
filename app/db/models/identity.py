@@ -85,6 +85,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("privacy_versions.id", ondelete="RESTRICT")
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    language_selected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class UserConsent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

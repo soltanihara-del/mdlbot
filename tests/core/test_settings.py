@@ -53,7 +53,7 @@ def test_cross_setting_invariants_fail_closed() -> None:
     with pytest.raises(SettingsValidationError):
         validate_cross_setting_invariants(
             {
-                "telegram.api_mode": "cloud",
+                "telegram.api_mode": "official",
                 "telegram.cloud_upload_limit": 50 * 1024**2,
                 "files.max_size": 51 * 1024**2,
             }

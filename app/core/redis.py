@@ -20,6 +20,10 @@ class RedisManager:
     def started(self) -> bool:
         return self._client is not None
 
+    @property
+    def client(self) -> Redis:
+        return self._require_client()
+
     def key(self, *parts: str) -> str:
         normalized = [part.strip(":") for part in parts]
         return ":".join((self._settings.redis_key_prefix, *normalized))

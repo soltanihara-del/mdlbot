@@ -115,7 +115,9 @@ PERMISSIONS: tuple[PermissionDefinition, ...] = (
     _permission("security.false_positive", "security", "Mark false positives", "ثبت تشخیص اشتباه", "high"),
     _permission("audit.view", "audit", "View audit log", "مشاهده گزارش ممیزی", "high"),
     _permission("backup.create", "backup", "Create backup", "ایجاد پشتیبان", "high"),
+    _permission("backup.view", "backup", "View backups", "مشاهده پشتیبان‌ها", "medium"),
     _permission("backup.download", "backup", "Download backup", "دریافت پشتیبان", "critical", super_only=True),
+    _permission("restore.view", "backup", "View restore operations", "مشاهده بازگردانی‌ها", "medium"),
     _permission("restore.execute", "backup", "Execute restore", "اجرای بازگردانی", "critical", super_only=True),
     _permission("infrastructure.manage", "infrastructure", "Manage infrastructure", "مدیریت زیرساخت", "critical", super_only=True),
     _permission("secrets.rotate", "security", "Rotate secrets", "چرخش اسرار", "critical", super_only=True),
@@ -203,7 +205,7 @@ SETTINGS: tuple[SettingDefinition, ...] = (
     _setting("broadcast.batch_size", "broadcast", "integer", 25, "Broadcast batch size", "اندازه دسته همگانی", minimum=1, maximum=100),
     _setting("broadcast.rate_per_second", "broadcast", "decimal", 20, "Broadcast send rate", "نرخ ارسال همگانی", unit="per_second", minimum="0.1", maximum=30),
     _setting("support.open_ticket_limit", "support", "integer", 3, "Open ticket limit", "حد تیکت باز", minimum=1, maximum=100),
-    _setting("telegram.api_mode", "telegram", "enum", "local", "Telegram API mode", "حالت API تلگرام", allowed=("local", "cloud"), reload_type="restart_required"),
+    _setting("telegram.api_mode", "telegram", "enum", "local", "Telegram API mode", "حالت API تلگرام", allowed=("local", "official"), reload_type="restart_required"),
     _setting("telegram.cloud_upload_limit", "telegram", "bytes", 50 * 1024**2, "Cloud upload limit", "حد آپلود ابری", unit="bytes", minimum=1024**2, maximum=50 * 1024**2),
     _setting("telegram.local_upload_limit", "telegram", "bytes", 2 * 1024**3, "Local upload limit", "حد آپلود محلی", unit="bytes", minimum=1024**2, maximum=20 * 1024**3),
 )

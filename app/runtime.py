@@ -18,7 +18,7 @@ from app.core.logging import configure_logging, get_logger
 from app.db.session import Database
 
 
-IMPLEMENTED_SERVICES = {"api"}
+IMPLEMENTED_SERVICES = {"api", "bot"}
 
 
 async def _bootstrap() -> None:
@@ -47,10 +47,12 @@ def _run(service: str) -> None:
             context={"service": service, "implemented": sorted(IMPLEMENTED_SERVICES)},
         )
     settings = load_settings(service)
+    app_path = "app.api.app:application" if service == "api" else "app.bot.server:application"
+    port = settings.api_port if service == "api" else settings.bot_internal_port
     uvicorn.run(
-        "app.api.app:application",
-        host=settings.api_host,
-        port=settings.api_port,
+        app_path,
+        host=settings.api_host if service == "api" else settings.bot_internal_host,
+        port=port,
         log_config=None,
         proxy_headers=False,
         server_header=False,
@@ -63,7 +65,8 @@ def _healthcheck(service: str) -> None:
         raise StageBoundaryError("service is not implemented", context={"service": service})
     settings = load_settings(service)
     try:
-        with urlopen(f"http://127.0.0.1:{settings.api_port}/health/live", timeout=4) as response:
+        port = settings.api_port if service == "api" else settings.bot_internal_port
+        with urlopen(f"http://127.0.0.1:{port}/health/ready", timeout=4) as response:
             if response.status != 200:
                 raise RuntimeError(f"unhealthy HTTP status: {response.status}")
     except (OSError, URLError) as exc:

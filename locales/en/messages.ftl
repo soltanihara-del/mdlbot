@@ -9,3 +9,27 @@ file-ready = Your file is ready.
 maintenance-active = The service is temporarily under maintenance.
 support-ticket-created = Ticket <code>{ $ticket }</code> was created.
 settings-saved = Setting <code>{ $key }</code> was saved as version { $version }.
+main-menu-prompt = Choose an action from the menu.
+prompt-send-telegram-file = Send the Telegram file you want processed.
+prompt-send-direct-url = Send one direct HTTP or HTTPS URL.
+my-files-empty = You do not have any active files.
+my-files-list = <b>Your recent files</b>
+    { $items }
+my-files-item = • { $filename } — { $expires }
+account-summary = Account status: <b>{ $status }</b>
+    Interface language: { $locale }
+settings-language = Choose your interface language.
+help-message = Use the menu to submit a file or URL, review your files, account, and settings. Use /cancel to stop a workflow.
+forced-join-required = Join the required channels, then repeat your request.
+access-banned = Your access is restricted: { $reason }
+user-status-active = Active
+user-status-restricted = Restricted
+user-status-banned = Banned
+user-status-deleted = Deleted
+language-name-fa = Persian
+language-name-en = English
+support-subject-prompt = Send a short subject for your support ticket.
+support-subject-invalid = The subject must contain 3 to 512 characters.
+support-message-prompt = Describe the issue in one message.
+support-message-invalid = The message must contain 2 to 8000 characters.
+support-limit-reached = You have reached the open-ticket limit.
